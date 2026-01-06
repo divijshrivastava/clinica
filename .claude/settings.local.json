@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc:*)",
+      "Bash(chmod:*)",
+      "Bash(npm install:*)",
+      "Bash(psql:*)",
+      "Bash(createdb:*)",
+      "Bash(npm run dev:*)",
+      "Bash(cat:*)",
+      "Bash(curl:*)",
+      "Bash(jq:*)",
+      "Bash(./test-register-patient.sh:*)",
+      "Bash(./test-update-patient-contact.sh:*)",
+      "Bash(npm run build:*)",
+      "Bash(lsof:*)",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNjYwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwIiwiaG9zcGl0YWxfaWQiOiI1NTBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwMDAiLCJyb2xlIjoiZG9jdG9yIiwiZW1haWwiOiJkb2N0b3JAZXhhbXBsZS5jb20iLCJpYXQiOjE3Njc3MjA4MDksImV4cCI6MTc2NzgwNzIwOX0._FwO58-HPy0-IY7NMu-benmn8qv-NhiXthFwfatIwjI\")",
+      "Bash(node generate-test-token.js:*)",
+      "Bash(./test-visits-api.sh:*)",
+      "WebFetch(domain:dribbble.com)",
+      "WebSearch"
+    ]
+  }
+}
