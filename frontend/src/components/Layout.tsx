@@ -59,7 +59,7 @@ export default function Layout() {
           <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
             <FiActivity className="w-5 h-5 text-white" />
           </div>
-          <h1 className="text-xl font-bold text-white m-0">Clinica</h1>
+          <h1 className="text-xl font-bold text-white m-0">MyMedic</h1>
         </Link>
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -79,7 +79,7 @@ export default function Layout() {
                 <div className="w-10 h-10 bg-primary-600 rounded-lg flex items-center justify-center mr-3">
                   <FiActivity className="w-6 h-6 text-white" />
                 </div>
-                <h1 className="text-xl font-bold text-white m-0">Clinica</h1>
+                <h1 className="text-xl font-bold text-white m-0">MyMedic</h1>
               </Link>
             </div>
 
@@ -161,7 +161,7 @@ export default function Layout() {
                     <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
                       <FiActivity className="w-5 h-5 text-white" />
                     </div>
-                    <h1 className="text-lg font-bold text-white m-0">Clinica</h1>
+                    <h1 className="text-lg font-bold text-white m-0">MyMedic</h1>
                   </Link>
                   <button
                     onClick={() => setMobileMenuOpen(false)}

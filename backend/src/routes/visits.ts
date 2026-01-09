@@ -41,9 +41,13 @@ router.get(
         v.updated_at,
         p.mrn as patient_mrn,
         p.first_name as patient_first_name,
-        p.last_name as patient_last_name
+        p.last_name as patient_last_name,
+        u.full_name as doctor_name,
+        u.email as doctor_email,
+        u.specialization as doctor_specialization
       FROM visits v
       LEFT JOIN patients p ON v.patient_id = p.id
+      LEFT JOIN users u ON v.doctor_id = u.id
       WHERE v.id = $1`,
       [id]
     );
@@ -59,7 +63,7 @@ router.get(
 
     const visit = result.rows[0];
 
-    // Format response with nested patient info
+    // Format response with nested patient and doctor info
     const formattedVisit = {
       id: visit.id,
       hospital_id: visit.hospital_id,
@@ -69,6 +73,11 @@ router.get(
         mrn: visit.patient_mrn,
         first_name: visit.patient_first_name,
         last_name: visit.patient_last_name,
+      },
+      doctor: {
+        name: visit.doctor_name,
+        email: visit.doctor_email,
+        specialization: visit.doctor_specialization,
       },
       visit_date: visit.visit_date,
       visit_time: visit.visit_time,
@@ -171,16 +180,20 @@ router.get(
         v.updated_at,
         p.mrn as patient_mrn,
         p.first_name as patient_first_name,
-        p.last_name as patient_last_name
+        p.last_name as patient_last_name,
+        u.full_name as doctor_name,
+        u.email as doctor_email,
+        u.specialization as doctor_specialization
       FROM visits v
       LEFT JOIN patients p ON v.patient_id = p.id
+      LEFT JOIN users u ON v.doctor_id = u.id
       ${whereClause}
       ORDER BY v.visit_date DESC, v.visit_time DESC
       LIMIT $${paramIndex++} OFFSET $${paramIndex++}`,
       params
     );
 
-    // Format results with nested patient info
+    // Format results with nested patient and doctor info
     const formattedVisits = result.rows.map((visit) => ({
       id: visit.id,
       hospital_id: visit.hospital_id,
@@ -190,6 +203,11 @@ router.get(
         mrn: visit.patient_mrn,
         first_name: visit.patient_first_name,
         last_name: visit.patient_last_name,
+      },
+      doctor: {
+        name: visit.doctor_name,
+        email: visit.doctor_email,
+        specialization: visit.doctor_specialization,
       },
       visit_date: visit.visit_date,
       visit_time: visit.visit_time,

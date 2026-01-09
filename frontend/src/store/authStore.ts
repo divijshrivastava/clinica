@@ -49,7 +49,7 @@ export const useAuthStore = create<AuthState>()(
       },
     }),
     {
-      name: "clinica-auth",
+      name: "mymedic-auth",
       storage: createJSONStorage(() => localStorage),
       onRehydrateStorage: () => {
         console.log("🔄 Zustand rehydration started");

@@ -1,7 +1,7 @@
 {
-  "name": "clinica-frontend",
+  "name": "mymedic-frontend",
   "version": "1.0.0",
-  "description": "Clinica Patient Management Platform - Frontend",
+  "description": "MyMedic Patient Management Platform - Frontend",
   "private": true,
   "scripts": {
     "dev": "vite",

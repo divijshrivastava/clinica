@@ -11,7 +11,7 @@ export function useAuthHydration() {
   useEffect(() => {
     // If Zustand hasn't hydrated yet, manually check localStorage
     if (!_hasHydrated) {
-      const stored = localStorage.getItem('clinica-auth')
+      const stored = localStorage.getItem('mymedic-auth')
       if (stored) {
         try {
           const parsed = JSON.parse(stored)

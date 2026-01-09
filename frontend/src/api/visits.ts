@@ -10,6 +10,11 @@ export interface Visit {
     first_name?: string
     last_name?: string
   }
+  doctor?: {
+    name?: string
+    email?: string
+    specialization?: string
+  }
   visit_number?: number
   visit_date: string
   visit_time?: string

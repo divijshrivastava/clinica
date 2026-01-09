@@ -8,7 +8,11 @@ import {
   FiTrendingDown,
   FiArrowRight,
   FiFileText,
-  FiMoreVertical
+  FiMoreVertical,
+  FiCheckCircle,
+  FiCircle,
+  FiX,
+  FiPlay
 } from 'react-icons/fi'
 import { patientsApi } from '../api/patients'
 import { visitsApi } from '../api/visits'
@@ -238,6 +242,137 @@ function ChartCard({ title, subtitle, mainValue, secondaryValue, change, icon: I
   )
 }
 
+interface OnboardingChecklistProps {
+  onDismiss: () => void
+  stats: {
+    totalPatients: number
+    scheduledVisits: number
+    completedVisits: number
+  }
+}
+
+function OnboardingChecklist({ onDismiss, stats }: OnboardingChecklistProps) {
+  const navigate = useNavigate()
+
+  const tasks = [
+    {
+      id: 'register-patient',
+      title: 'Register your first patient',
+      description: 'Add patient information to get started',
+      completed: stats.totalPatients > 0,
+      action: () => navigate('/patients?action=register'),
+      icon: FiUsers,
+    },
+    {
+      id: 'schedule-visit',
+      title: 'Schedule a visit',
+      description: 'Create your first appointment',
+      completed: stats.scheduledVisits > 0,
+      action: () => navigate('/visits?action=schedule'),
+      icon: FiCalendar,
+    },
+    {
+      id: 'complete-visit',
+      title: 'Complete a visit',
+      description: 'Add diagnosis and treatment notes',
+      completed: stats.completedVisits > 0,
+      action: () => navigate('/visits'),
+      icon: FiCheckCircle,
+    },
+  ]
+
+  const completedCount = tasks.filter(t => t.completed).length
+  const progress = (completedCount / tasks.length) * 100
+
+  return (
+    <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white relative overflow-hidden">
+      {/* Background pattern */}
+      <div className="absolute inset-0 opacity-10">
+        <div className="absolute inset-0" style={{
+          backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)',
+          backgroundSize: '40px 40px'
+        }}></div>
+      </div>
+
+      <button
+        onClick={onDismiss}
+        className="absolute top-4 right-4 text-white/80 hover:text-white transition-colors"
+      >
+        <FiX className="w-5 h-5" />
+      </button>
+
+      <div className="relative">
+        <div className="flex items-center space-x-3 mb-4">
+          <div className="bg-white/20 p-2 rounded-lg">
+            <FiPlay className="w-6 h-6" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold">Getting Started with MyMedic</h2>
+            <p className="text-blue-100">Complete these steps to unlock the full potential</p>
+          </div>
+        </div>
+
+        {/* Progress bar */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium">Setup Progress</span>
+            <span className="text-sm font-medium">{completedCount}/{tasks.length} completed</span>
+          </div>
+          <div className="h-2 bg-white/20 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-white rounded-full transition-all duration-500"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Task list */}
+        <div className="space-y-3">
+          {tasks.map((task) => {
+            const Icon = task.icon
+            return (
+              <div
+                key={task.id}
+                className="bg-white/10 backdrop-blur-sm rounded-lg p-4 flex items-center justify-between hover:bg-white/15 transition-all cursor-pointer"
+                onClick={task.action}
+              >
+                <div className="flex items-center space-x-3">
+                  <div className={`${task.completed ? 'text-green-300' : 'text-white/60'}`}>
+                    {task.completed ? (
+                      <FiCheckCircle className="w-6 h-6" />
+                    ) : (
+                      <FiCircle className="w-6 h-6" />
+                    )}
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <Icon className="w-5 h-5" />
+                    <div>
+                      <h3 className="font-semibold">{task.title}</h3>
+                      <p className="text-sm text-blue-100">{task.description}</p>
+                    </div>
+                  </div>
+                </div>
+                {!task.completed && (
+                  <FiArrowRight className="w-5 h-5 text-white/60" />
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        {completedCount === tasks.length && (
+          <div className="mt-6 p-4 bg-green-500/20 rounded-lg border border-green-300/30">
+            <div className="flex items-center space-x-2">
+              <FiCheckCircle className="w-5 h-5 text-green-300" />
+              <p className="font-semibold">Congratulations! You've completed the initial setup.</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const { user } = useAuthStore()
   const navigate = useNavigate()
@@ -249,6 +384,7 @@ export default function Dashboard() {
   })
   const [recentVisits, setRecentVisits] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [showOnboarding, setShowOnboarding] = useState(true)
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -272,6 +408,11 @@ export default function Dashboard() {
         })
 
         setRecentVisits(recentVisitsData.data)
+
+        // Check if user should see onboarding
+        const hasCompletedOnboarding = localStorage.getItem('onboarding_dismissed')
+        const hasData = patientsData.pagination.total > 0 && completedVisitsData.pagination.total > 0
+        setShowOnboarding(!hasCompletedOnboarding && !hasData)
       } catch (error) {
         console.error('Error fetching stats:', error)
       } finally {
@@ -281,6 +422,11 @@ export default function Dashboard() {
 
     fetchStats()
   }, [])
+
+  const handleDismissOnboarding = () => {
+    localStorage.setItem('onboarding_dismissed', 'true')
+    setShowOnboarding(false)
+  }
 
   const getUserName = () => {
     if (user?.email) {
@@ -309,6 +455,18 @@ export default function Dashboard() {
           Track, manage and forecast your patient reports and data.
         </p>
       </div>
+
+      {/* Onboarding Checklist */}
+      {showOnboarding && (
+        <OnboardingChecklist
+          onDismiss={handleDismissOnboarding}
+          stats={{
+            totalPatients: stats.totalPatients,
+            scheduledVisits: stats.scheduledVisits,
+            completedVisits: stats.completedVisits,
+          }}
+        />
+      )}
 
       {/* Top Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -426,63 +584,85 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
-              {recentVisits.map((visit, idx) => (
-                <tr key={visit.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    #{String(idx + 1).padStart(4, '0')}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                    {format(new Date(visit.visit_date), 'MMM dd, yyyy')}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <button
-                      onClick={() => visit.patient?.id && navigate(`/patients/${visit.patient.id}`)}
-                      className="flex items-center hover:opacity-80 transition-opacity cursor-pointer w-full text-left"
-                    >
-                      <div className="h-8 w-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-xs font-semibold mr-3">
-                        {visit.patient?.first_name?.[0]}{visit.patient?.last_name?.[0]}
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {visit.patient?.first_name} {visit.patient?.last_name}
-                        </div>
-                        <div className="text-xs text-gray-500">{visit.patient?.mrn}</div>
-                      </div>
-                    </button>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="h-6 w-6 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-xs mr-2">
-                        Dr
-                      </div>
-                      <span className="text-sm text-gray-900">Dr. Savannah Nguyen</span>
+              {recentVisits.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-12 text-center">
+                    <div className="flex flex-col items-center justify-center">
+                      <FiCalendar className="w-12 h-12 text-gray-300 mb-3" />
+                      <p className="text-gray-500 mb-2">No appointments yet</p>
+                      <button
+                        onClick={() => navigate('/visits?action=schedule')}
+                        className="text-blue-600 hover:text-blue-700 font-medium text-sm"
+                      >
+                        Schedule your first appointment →
+                      </button>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                    Room {Math.floor(Math.random() * 20) + 1}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      visit.status === 'completed'
-                        ? 'bg-green-100 text-green-800'
-                        : visit.status === 'scheduled'
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {visit.status === 'completed' ? 'Completed' : visit.status === 'scheduled' ? 'Appointed' : 'Waiting'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <button 
-                      onClick={() => navigate(`/visits/${visit.id}`)}
-                      className="text-gray-400 hover:text-gray-600 transition-colors"
-                      title="View visit details"
-                    >
-                      <FiMoreVertical className="w-5 h-5" />
-                    </button>
-                  </td>
                 </tr>
-              ))}
+              ) : (
+                recentVisits.map((visit, idx) => (
+                  <tr key={visit.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      #{String(idx + 1).padStart(4, '0')}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                      {format(new Date(visit.visit_date), 'MMM dd, yyyy')}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <button
+                        onClick={() => visit.patient?.id && navigate(`/patients/${visit.patient.id}`)}
+                        className="flex items-center hover:opacity-80 transition-opacity cursor-pointer w-full text-left"
+                      >
+                        <div className="h-8 w-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-xs font-semibold mr-3">
+                          {visit.patient?.first_name?.[0]}{visit.patient?.last_name?.[0]}
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-gray-900 hover:underline">
+                            {visit.patient?.first_name} {visit.patient?.last_name}
+                          </div>
+                          <div className="text-xs text-gray-500">{visit.patient?.mrn}</div>
+                        </div>
+                      </button>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <button
+                        onClick={() => navigate(`/doctors/${visit.doctor_id || 'unknown'}`)}
+                        className="flex items-center hover:opacity-80 transition-opacity cursor-pointer text-left"
+                      >
+                        <div className="h-6 w-6 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-xs mr-2">
+                          Dr
+                        </div>
+                        <span className="text-sm text-gray-900 hover:underline">
+                          {visit.doctor?.name ? `Dr. ${visit.doctor.name}` : 'Dr. Unknown'}
+                        </span>
+                      </button>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                      Room {Math.floor(Math.random() * 20) + 1}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        visit.status === 'completed'
+                          ? 'bg-green-100 text-green-800'
+                          : visit.status === 'scheduled'
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {visit.status === 'completed' ? 'Completed' : visit.status === 'scheduled' ? 'Appointed' : 'Waiting'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <button
+                        onClick={() => navigate(`/visits/${visit.id}`)}
+                        className="text-gray-400 hover:text-gray-600 transition-colors"
+                        title="View visit details"
+                      >
+                        <FiMoreVertical className="w-5 h-5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

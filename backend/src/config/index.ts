@@ -8,7 +8,7 @@ export const config = {
   logLevel: process.env.LOG_LEVEL || 'info',
 
   database: {
-    url: process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/clinica_dev',
+    url: process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/mymedic_dev',
     pool: {
       min: parseInt(process.env.DATABASE_POOL_MIN || '10', 10),
       max: parseInt(process.env.DATABASE_POOL_MAX || '50', 10),

@@ -23,7 +23,7 @@ const consoleFormat = winston.format.combine(
 export const logger = winston.createLogger({
   level: config.logLevel,
   format: logFormat,
-  defaultMeta: { service: 'clinica-backend' },
+  defaultMeta: { service: 'mymedic-backend' },
   transports: [
     // Write all logs to console
     new winston.transports.Console({

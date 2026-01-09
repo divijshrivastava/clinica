@@ -65,6 +65,8 @@ export type EventType =
   | "whatsapp_message_failed"
   // User/Hospital Events
   | "user_registered"
+  | "user_updated"
+  | "user_activated"
   | "user_role_changed"
   | "user_deactivated"
   | "hospital_created"

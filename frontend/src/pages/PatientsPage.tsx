@@ -5,6 +5,7 @@ import { FiPlus, FiSearch, FiUser, FiX } from 'react-icons/fi'
 import { useForm } from 'react-hook-form'
 import { patientsApi, Patient, PatientListResponse, RegisterPatientPayload } from '../api/patients'
 import { format } from 'date-fns'
+import { useAuthStore } from '../store/authStore'
 
 export default function PatientsPage() {
   const navigate = useNavigate()
@@ -34,17 +35,25 @@ export default function PatientsPage() {
   }, [searchParams, setSearchParams])
 
   useEffect(() => {
+    const authStore = useAuthStore.getState()
+    console.log('Auth state:', {
+      token: authStore.token ? 'present' : 'missing',
+      user: authStore.user,
+      isAuthenticated: authStore.isAuthenticated
+    })
     fetchPatients()
   }, [pagination.offset, searchTerm])
 
   const fetchPatients = async () => {
     setLoading(true)
     try {
+      console.log('Fetching patients...')
       const data: PatientListResponse = await patientsApi.list({
         limit: pagination.limit,
         offset: pagination.offset,
         search: searchTerm || undefined,
       })
+      console.log('Patients loaded:', data)
       setPatients(data.data)
       setPagination(prev => ({
         ...prev,
@@ -52,8 +61,13 @@ export default function PatientsPage() {
         has_more: data.pagination.has_more,
       }))
     } catch (error: any) {
-      toast.error('Failed to load patients')
-      console.error(error)
+      console.error('Failed to load patients - full error:', error)
+      console.error('Error response:', error.response?.data)
+      console.error('Error status:', error.response?.status)
+      console.error('Error message:', error.message)
+      
+      const errorMessage = error.response?.data?.error?.message || error.message || 'Failed to load patients'
+      toast.error(errorMessage)
     } finally {
       setLoading(false)
     }

@@ -4,36 +4,7 @@ import { useForm } from 'react-hook-form'
 import { toast } from 'react-toastify'
 import { LoginCredentials } from '../api/auth'
 import { useAuthStore } from '../store/authStore'
-import apiClient from '../api/client'
-
-// Helper to generate a valid JWT from the backend
-async function generateMockJWT(user: { id: string; hospital_id: string; role: string; email: string }) {
-  try {
-    // Call a helper endpoint to generate a JWT (we'll create this)
-    const response = await fetch('http://localhost:3000/auth/generate-test-token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        user_id: user.id,
-        hospital_id: user.hospital_id,
-        role: user.role,
-        email: user.email,
-      }),
-    })
-
-    if (!response.ok) {
-      throw new Error('Failed to generate token')
-    }
-
-    const data = await response.json()
-    return data.token
-  } catch (error) {
-    console.error('Error generating JWT:', error)
-    // Fallback to a pre-generated token (valid for 24h from 2026-01-06)
-    // This token was generated with the backend's JWT secret
-    return 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNjYwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwIiwiaG9zcGl0YWxfaWQiOiI1NTBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwMDAiLCJyb2xlIjoiZG9jdG9yIiwiZW1haWwiOiJ0ZXN0LmRvY3RvckBleGFtcGxlLmNvbSIsImlhdCI6MTc2NzcxOTA1NiwiZXhwIjoxNzY3ODA1NDU2fQ.wQju_dO_eW8OoCReDyL-7GRKTOk_M8IvfBgvDWBsKHE'
-  }
-}
+import { login } from '../services/api'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -49,87 +20,37 @@ export default function LoginPage() {
   }, [isAuthenticated, navigate])
 
   const onSubmit = async (data: LoginCredentials) => {
-    console.log('🔐 onSubmit called with:', data.email)
+    console.log('🔐 Login attempt:', data.email)
+    console.log('🔐 Login data:', data)
     setLoading(true)
 
     try {
-      // For demo purposes, we'll create a mock login with a real JWT
-      // In production, this would call the backend auth endpoint
-      const mockUser = {
-        id: '660e8400-e29b-41d4-a716-446655440000',
+      console.log('🔐 Calling login API...')
+      // Call the real login API
+      const response = await login({
         email: data.email,
-        full_name: 'Dr. Test Doctor',
-        role: 'doctor',
-        hospital_id: '550e8400-e29b-41d4-a716-446655440000',
-        hospital_name: 'Test Hospital',
-      }
-
-      // Generate a real JWT token that the backend will accept
-      // This uses the same secret as the backend (development-secret-key-change-in-production)
-      const mockToken = await generateMockJWT(mockUser)
-
-      console.log('🔐 Starting login process...')
-      
-      // Write directly to localStorage FIRST (most reliable)
-      const authData = {
-        state: {
-          token: mockToken,
-          user: {
-            user_id: mockUser.id,
-            hospital_id: mockUser.hospital_id,
-            role: mockUser.role,
-            email: mockUser.email,
-          },
-          isAuthenticated: true,
-          _hasHydrated: true,
-        },
-        version: 0,
-      }
-      
-      console.log('💾 Writing auth data to localStorage:', authData)
-      localStorage.setItem('clinica-auth', JSON.stringify(authData))
-      
-      // Also update Zustand store (for current session)
-      const store = useAuthStore.getState()
-      store.login(mockToken, {
-        user_id: mockUser.id,
-        hospital_id: mockUser.hospital_id,
-        role: mockUser.role as any,
-        email: mockUser.email,
+        password: data.password,
       })
+
+      console.log('🔐 Login successful:', response)
+
+      // Update Zustand store
+      const store = useAuthStore.getState()
+      store.login(response.token, response.user)
       store.setHasHydrated(true)
 
-      // Verify it was saved
-      const stored = localStorage.getItem('clinica-auth')
-      console.log('✅ Verified localStorage saved:', stored ? 'Yes' : 'No')
-      
-      if (!stored) {
-        throw new Error('Failed to save to localStorage')
-      }
-
-      // Verify Zustand state
-      const authState = useAuthStore.getState()
-      console.log('✅ Zustand state:', {
-        isAuthenticated: authState.isAuthenticated,
-        hasToken: !!authState.token,
-        hasUser: !!authState.user,
-      })
-
-      if (!authState.isAuthenticated || !authState.token) {
-        throw new Error('Failed to set authentication state')
-      }
-
       toast.success('Login successful!')
-      
+
       // Wait a moment for everything to settle
       await new Promise(resolve => setTimeout(resolve, 300))
-      
-      // Navigate with full page reload (ensures Zustand rehydrates from localStorage)
+
+      // Navigate to dashboard
       console.log('🚀 Navigating to dashboard...')
-      window.location.href = '/'
+      navigate('/', { replace: true })
     } catch (error: any) {
       console.error('Login error:', error)
-      toast.error(error.message || 'Login failed')
+      const errorMessage = error.response?.data?.error?.message || error.message || 'Login failed'
+      toast.error(errorMessage)
       setLoading(false)
     }
   }
@@ -138,18 +59,14 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-500 to-primary-700 px-4">
       <div className="max-w-md w-full bg-white rounded-lg shadow-xl p-8">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-primary-600 mb-2">Clinica</h1>
+          <h1 className="text-3xl font-bold text-primary-600 mb-2">MyMedic</h1>
           <p className="text-gray-600">Doctor-first Patient Management</p>
         </div>
 
         <form 
-          onSubmit={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            console.log('📝 Form submit event - calling handleSubmit')
-            handleSubmit(onSubmit)(e)
-          }}
+          onSubmit={handleSubmit(onSubmit)}
           className="space-y-6"
+          noValidate
         >
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
@@ -160,7 +77,7 @@ export default function LoginPage() {
               type="email"
               autoComplete="email"
               {...register('email', { required: 'Email is required' })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 text-gray-900"
               placeholder="doctor@example.com"
             />
             {errors.email && (
@@ -177,7 +94,7 @@ export default function LoginPage() {
               type="password"
               autoComplete="current-password"
               {...register('password', { required: 'Password is required' })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 text-gray-900"
               placeholder="••••••••"
             />
             {errors.password && (
@@ -203,47 +120,57 @@ export default function LoginPage() {
             type="button"
             onClick={async () => {
               console.log('🧪 Test login button clicked')
-              
-              // Directly write to localStorage first
-              const authData = {
-                state: {
-                  token: 'test-token',
-                  user: {
+              setLoading(true)
+
+              try {
+                // Generate a valid JWT token from the backend
+                const response = await fetch('http://localhost:3000/auth/generate-test-token', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
                     user_id: 'test-user',
                     hospital_id: 'test-hospital',
                     role: 'doctor',
                     email: 'test@test.com',
-                  },
-                  isAuthenticated: true,
-                  _hasHydrated: true,
-                },
-                version: 0,
+                  }),
+                })
+
+                if (!response.ok) {
+                  throw new Error('Failed to generate test token')
+                }
+
+                const data = await response.json()
+                const token = data.token
+
+                console.log('✅ Generated valid JWT token')
+
+                // Update Zustand store with the valid token
+                const store = useAuthStore.getState()
+                store.login(token, {
+                  user_id: 'test-user',
+                  hospital_id: 'test-hospital',
+                  role: 'doctor',
+                  email: 'test@test.com',
+                })
+                store.setHasHydrated(true)
+
+                toast.success('Test login successful!')
+
+                // Wait a moment
+                await new Promise(resolve => setTimeout(resolve, 300))
+
+                console.log('🚀 Navigating to dashboard...')
+                window.location.href = '/'
+              } catch (error) {
+                console.error('Test login error:', error)
+                toast.error('Test login failed')
+                setLoading(false)
               }
-              
-              console.log('Writing to localStorage:', authData)
-              localStorage.setItem('clinica-auth', JSON.stringify(authData))
-              
-              // Also update Zustand store
-              const store = useAuthStore.getState()
-              store.login('test-token', {
-                user_id: 'test-user',
-                hospital_id: 'test-hospital',
-                role: 'doctor',
-                email: 'test@test.com',
-              })
-              store.setHasHydrated(true)
-              
-              // Verify it was saved
-              const stored = localStorage.getItem('clinica-auth')
-              console.log('✅ Verified localStorage:', stored ? 'Saved!' : '❌ Not saved')
-              
-              // Wait a moment
-              await new Promise(resolve => setTimeout(resolve, 300))
-              
-              console.log('🚀 Navigating to dashboard...')
-              window.location.href = '/'
             }}
-            className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100"
+            disabled={loading}
+            className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             🧪 Test Login (Bypass Form)
           </button>

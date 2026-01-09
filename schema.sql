@@ -1,4 +1,4 @@
--- Clinica Patient Management Platform
+-- MyMedic Patient Management Platform
 -- Event-Sourced Database Schema v2.0
 -- PostgreSQL 15+
 --
@@ -38,7 +38,12 @@ CREATE TYPE aggregate_type AS ENUM (
     'prescription',
     'whatsapp_message',
     'hospital',
-    'user'
+    'user',
+    'migration',
+    'invoice',
+    'payment',
+    'charge_code',
+    'admission'
 );
 
 -- Event types (domain events)
@@ -101,7 +106,38 @@ CREATE TYPE event_type AS ENUM (
     'user_role_changed',
     'user_deactivated',
     'hospital_created',
-    'hospital_settings_updated'
+    'hospital_settings_updated',
+
+    -- Migration events
+    'migration_started',
+    'migration_file_uploaded',
+    'migration_data_extracted',
+    'migration_data_validated',
+    'migration_error_fixed',
+    'migration_completed',
+    'migration_failed',
+    'migration_rolled_back',
+
+    -- Billing events
+    'charge_code_created',
+    'charge_code_updated',
+    'charge_code_deactivated',
+    'invoice_created',
+    'invoice_item_added',
+    'invoice_item_removed',
+    'invoice_finalized',
+    'invoice_cancelled',
+    'invoice_voided',
+    'payment_received',
+    'payment_refunded',
+    'payment_allocated',
+
+    -- ADT events
+    'patient_admitted',
+    'patient_transferred',
+    'patient_discharged',
+    'room_assigned',
+    'room_charge_added'
 );
 
 -- Existing enums (keep for projections)
@@ -172,7 +208,15 @@ CREATE TABLE event_store (
         (event_type::text LIKE 'prescription_%' AND aggregate_type = 'prescription') OR
         (event_type::text LIKE 'whatsapp_%' AND aggregate_type = 'whatsapp_message') OR
         (event_type::text LIKE 'user_%' AND aggregate_type = 'user') OR
-        (event_type::text LIKE 'hospital_%' AND aggregate_type = 'hospital')
+        (event_type::text LIKE 'hospital_%' AND aggregate_type = 'hospital') OR
+        (event_type::text LIKE 'migration_%' AND aggregate_type = 'migration') OR
+        (event_type::text LIKE 'charge_code_%' AND aggregate_type = 'charge_code') OR
+        (event_type::text LIKE 'invoice_%' AND aggregate_type = 'invoice') OR
+        (event_type::text LIKE 'payment_%' AND aggregate_type = 'payment') OR
+        (event_type::text LIKE '%admitted' AND aggregate_type = 'admission') OR
+        (event_type::text LIKE '%transferred' AND aggregate_type = 'admission') OR
+        (event_type::text LIKE '%discharged' AND aggregate_type = 'admission') OR
+        (event_type::text LIKE 'room_%' AND aggregate_type = 'admission')
     )
 
 ) PARTITION BY RANGE (event_timestamp);
@@ -371,7 +415,12 @@ INSERT INTO projection_state (projection_name) VALUES
     ('appointments_projection'),
     ('prescriptions_projection'),
     ('whatsapp_messages_projection'),
-    ('timeline_events_projection');
+    ('timeline_events_projection'),
+    ('migrations_projection'),
+    ('invoices_projection'),
+    ('payments_projection'),
+    ('charge_codes_projection'),
+    ('admissions_projection');
 
 -- =====================================================
 -- AGGREGATE SNAPSHOTS (Performance Optimization)
@@ -1018,6 +1067,553 @@ CREATE TABLE deletion_requests (
 );
 
 CREATE INDEX idx_deletion_requests_status ON deletion_requests(status) WHERE status IN ('pending', 'approved', 'scheduled');
+
+-- =====================================================
+-- DATA MIGRATION SYSTEM (Read Models)
+-- =====================================================
+
+-- Main migrations table (read model)
+CREATE TABLE migrations (
+    id UUID PRIMARY KEY,
+    current_version INT NOT NULL DEFAULT 0,
+    hospital_id UUID NOT NULL REFERENCES hospitals(id),
+    initiated_by_user_id UUID NOT NULL REFERENCES users(id),
+
+    migration_type VARCHAR(50) NOT NULL, -- csv, excel, api, database
+    status VARCHAR(50) NOT NULL, -- pending, extracting, validating, importing, completed, failed, rolled_back
+    entity_types TEXT[], -- ['patient', 'visit', 'prescription']
+    source_config JSONB, -- { file_path, api_endpoint, db_connection, etc. }
+
+    -- Progress tracking
+    total_records INTEGER,
+    processed_records INTEGER DEFAULT 0,
+    success_count INTEGER DEFAULT 0,
+    error_count INTEGER DEFAULT 0,
+    warning_count INTEGER DEFAULT 0,
+
+    -- Column mapping
+    column_mapping JSONB, -- { "source_column": "target_field" }
+
+    -- Timestamps
+    started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    last_event_id UUID
+);
+
+CREATE INDEX idx_migrations_hospital ON migrations(hospital_id);
+CREATE INDEX idx_migrations_status ON migrations(status);
+CREATE INDEX idx_migrations_created ON migrations(created_at DESC);
+
+-- Raw extracted data (temporary staging)
+CREATE TABLE migration_raw_data (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    migration_id UUID NOT NULL REFERENCES migrations(id) ON DELETE CASCADE,
+    row_number INTEGER NOT NULL,
+    raw_data JSONB NOT NULL, -- Original data as extracted
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_migration_raw_data_migration ON migration_raw_data(migration_id);
+
+-- Transformed data (ready for validation)
+CREATE TABLE migration_transformed_data (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    migration_id UUID NOT NULL REFERENCES migrations(id) ON DELETE CASCADE,
+    raw_data_id UUID NOT NULL REFERENCES migration_raw_data(id),
+    entity_type VARCHAR(50) NOT NULL, -- patient, visit, prescription
+    transformed_data JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_migration_transformed_migration ON migration_transformed_data(migration_id);
+
+-- Validation errors and warnings
+CREATE TABLE migration_validation_errors (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    migration_id UUID NOT NULL REFERENCES migrations(id) ON DELETE CASCADE,
+    transformed_data_id UUID NOT NULL REFERENCES migration_transformed_data(id),
+    row_number INTEGER NOT NULL,
+    field_name VARCHAR(255),
+    severity VARCHAR(20) NOT NULL, -- error, warning
+    error_code VARCHAR(100),
+    error_message TEXT NOT NULL,
+    suggested_fix TEXT,
+    fixed_value TEXT,
+    is_fixed BOOLEAN DEFAULT FALSE,
+    fixed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_migration_validation_migration ON migration_validation_errors(migration_id);
+CREATE INDEX idx_migration_validation_severity ON migration_validation_errors(migration_id, severity);
+
+-- Mapping of source records to generated events
+CREATE TABLE migration_event_map (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    migration_id UUID NOT NULL REFERENCES migrations(id),
+    source_record_id UUID NOT NULL, -- ID from migration_transformed_data
+    event_id UUID NOT NULL, -- ID from event_store
+    aggregate_type aggregate_type NOT NULL,
+    aggregate_id UUID NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_migration_event_map_migration ON migration_event_map(migration_id);
+CREATE INDEX idx_migration_event_map_event ON migration_event_map(event_id);
+
+-- Transformation rules
+CREATE TABLE migration_transformation_rules (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    migration_id UUID REFERENCES migrations(id),
+    entity_type VARCHAR(50) NOT NULL,
+    source_field VARCHAR(255) NOT NULL,
+    target_field VARCHAR(255) NOT NULL,
+    transformation_type VARCHAR(50), -- map, normalize, calculate, enrich
+    transformation_config JSONB, -- { "format": "YYYY-MM-DD", "default": null }
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_transformation_rules_migration ON migration_transformation_rules(migration_id);
+
+-- Validation rules
+CREATE TABLE migration_validation_rules (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    entity_type VARCHAR(50) NOT NULL, -- patient, visit, prescription
+    field_name VARCHAR(255) NOT NULL,
+    rule_type VARCHAR(50) NOT NULL, -- required, regex, range, unique, reference
+    rule_config JSONB NOT NULL,
+    severity VARCHAR(20) NOT NULL, -- error, warning
+    error_message TEXT NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_validation_rules_entity ON migration_validation_rules(entity_type);
+
+-- =====================================================
+-- BILLING SYSTEM (Read Models)
+-- =====================================================
+
+-- Tenant billing configuration
+CREATE TABLE tenant_billing_config (
+    tenant_id UUID PRIMARY KEY REFERENCES hospitals(id),
+    billing_enabled BOOLEAN DEFAULT FALSE,
+    billing_mode VARCHAR(50) NOT NULL DEFAULT 'full',
+        -- 'full': MyMedic handles all billing
+        -- 'export_only': Generate invoices but export to HIS for payment
+        -- 'coexist': Selective departments use MyMedic billing
+
+    -- Feature Toggles
+    enable_invoicing BOOLEAN DEFAULT TRUE,
+    enable_payments BOOLEAN DEFAULT TRUE,
+    enable_packages BOOLEAN DEFAULT FALSE,
+    enable_tariffs BOOLEAN DEFAULT FALSE,
+    enable_tax_calculation BOOLEAN DEFAULT FALSE,
+
+    -- HIS Integration
+    his_billing_system VARCHAR(100),
+    export_to_his BOOLEAN DEFAULT FALSE,
+    his_export_format VARCHAR(50), -- 'csv', 'hl7', 'fhir', 'api'
+    his_api_endpoint VARCHAR(500),
+
+    -- Workflow Settings
+    auto_generate_invoice BOOLEAN DEFAULT FALSE,
+    invoice_on_visit_complete BOOLEAN DEFAULT TRUE,
+    require_settlement_before_checkout BOOLEAN DEFAULT FALSE,
+
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Charge Codes (Master Catalog) - read model
+CREATE TABLE charge_codes (
+    id UUID PRIMARY KEY,
+    current_version INT NOT NULL DEFAULT 0,
+    hospital_id UUID NOT NULL REFERENCES hospitals(id),
+
+    code VARCHAR(50) NOT NULL,
+    display_name VARCHAR(255) NOT NULL,
+    description TEXT,
+
+    category VARCHAR(100) NOT NULL,
+        -- 'consultation', 'procedure', 'lab', 'radiology',
+        -- 'pharmacy', 'room', 'equipment', 'supplies'
+
+    department_id UUID,
+    service_type VARCHAR(50) NOT NULL DEFAULT 'BOTH',
+        -- 'OPD', 'IPD', 'BOTH'
+
+    -- Pricing
+    base_price DECIMAL(12,2) NOT NULL,
+    currency VARCHAR(3) DEFAULT 'INR',
+    unit VARCHAR(50) DEFAULT 'per_service',
+        -- 'per_service', 'per_day', 'per_hour', 'per_unit'
+
+    -- Tax Configuration
+    is_taxable BOOLEAN DEFAULT FALSE,
+    tax_rate DECIMAL(5,2) DEFAULT 0.00,
+
+    -- Status
+    is_active BOOLEAN DEFAULT TRUE,
+    effective_from DATE,
+    effective_until DATE,
+
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    last_event_id UUID,
+
+    UNIQUE(hospital_id, code),
+    CHECK (base_price >= 0),
+    CHECK (tax_rate >= 0 AND tax_rate <= 100)
+);
+
+CREATE INDEX idx_charge_codes_hospital_category ON charge_codes(hospital_id, category);
+CREATE INDEX idx_charge_codes_active ON charge_codes(hospital_id, is_active) WHERE is_active = TRUE;
+
+-- Tariff Tables (Differential Pricing)
+CREATE TABLE tariff_tables (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    hospital_id UUID NOT NULL REFERENCES hospitals(id),
+    tariff_name VARCHAR(100) NOT NULL,
+    description TEXT,
+    tariff_type VARCHAR(50) NOT NULL,
+        -- 'general', 'insurance', 'corporate', 'employee', 'research'
+
+    is_default BOOLEAN DEFAULT FALSE,
+    is_active BOOLEAN DEFAULT TRUE,
+
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+
+    UNIQUE(hospital_id, tariff_name)
+);
+
+CREATE TABLE tariff_prices (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tariff_id UUID NOT NULL REFERENCES tariff_tables(id) ON DELETE CASCADE,
+    charge_code_id UUID NOT NULL REFERENCES charge_codes(id) ON DELETE CASCADE,
+
+    override_price DECIMAL(12,2) NOT NULL,
+    discount_percentage DECIMAL(5,2) DEFAULT 0.00,
+
+    effective_from DATE,
+    effective_until DATE,
+
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+
+    UNIQUE(tariff_id, charge_code_id),
+    CHECK (override_price >= 0),
+    CHECK (discount_percentage >= 0 AND discount_percentage <= 100)
+);
+
+CREATE INDEX idx_tariff_prices_tariff ON tariff_prices(tariff_id);
+
+-- Package Pricing (Bundled Services)
+CREATE TABLE billing_packages (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    hospital_id UUID NOT NULL REFERENCES hospitals(id),
+    package_code VARCHAR(50) NOT NULL,
+    package_name VARCHAR(255) NOT NULL,
+    description TEXT,
+
+    package_type VARCHAR(50) NOT NULL,
+        -- 'maternity', 'surgery', 'health_checkup', 'chronic_care'
+
+    total_price DECIMAL(12,2) NOT NULL,
+    validity_days INTEGER DEFAULT 365,
+
+    is_active BOOLEAN DEFAULT TRUE,
+
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+
+    UNIQUE(hospital_id, package_code),
+    CHECK (total_price >= 0),
+    CHECK (validity_days > 0)
+);
+
+CREATE TABLE package_items (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    package_id UUID NOT NULL REFERENCES billing_packages(id) ON DELETE CASCADE,
+    charge_code_id UUID NOT NULL REFERENCES charge_codes(id) ON DELETE CASCADE,
+
+    quantity INTEGER NOT NULL DEFAULT 1,
+    included_price DECIMAL(12,2),
+
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+
+    UNIQUE(package_id, charge_code_id),
+    CHECK (quantity > 0)
+);
+
+-- Invoices (read model)
+CREATE TABLE invoices (
+    id UUID PRIMARY KEY,
+    current_version INT NOT NULL DEFAULT 0,
+    hospital_id UUID NOT NULL REFERENCES hospitals(id),
+    patient_id UUID NOT NULL REFERENCES patients(id),
+
+    invoice_number VARCHAR(50) NOT NULL UNIQUE,
+    invoice_date DATE NOT NULL DEFAULT CURRENT_DATE,
+
+    -- Links
+    visit_id UUID REFERENCES visits(id),
+    admission_id UUID, -- References admissions table
+
+    -- Pricing context
+    tariff_id UUID REFERENCES tariff_tables(id),
+    package_id UUID REFERENCES billing_packages(id),
+
+    -- Amounts
+    subtotal DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    discount_amount DECIMAL(12,2) DEFAULT 0.00,
+    discount_reason TEXT,
+    tax_amount DECIMAL(12,2) DEFAULT 0.00,
+    total_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    paid_amount DECIMAL(12,2) DEFAULT 0.00,
+    outstanding_amount DECIMAL(12,2) DEFAULT 0.00,
+
+    -- Status
+    status VARCHAR(50) NOT NULL DEFAULT 'draft',
+        -- 'draft', 'finalized', 'partially_paid', 'paid', 'overdue', 'cancelled', 'void'
+
+    finalized_at TIMESTAMPTZ,
+    finalized_by UUID REFERENCES users(id),
+    due_date DATE,
+    paid_at TIMESTAMPTZ,
+    cancelled_at TIMESTAMPTZ,
+    cancellation_reason TEXT,
+
+    -- Notes
+    notes TEXT,
+
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    created_by UUID REFERENCES users(id),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    last_event_id UUID,
+
+    CHECK (subtotal >= 0),
+    CHECK (discount_amount >= 0),
+    CHECK (tax_amount >= 0),
+    CHECK (total_amount >= 0),
+    CHECK (paid_amount >= 0),
+    CHECK (outstanding_amount >= 0)
+);
+
+CREATE INDEX idx_invoices_hospital ON invoices(hospital_id);
+CREATE INDEX idx_invoices_patient ON invoices(patient_id, invoice_date DESC);
+CREATE INDEX idx_invoices_status ON invoices(status);
+CREATE INDEX idx_invoices_number ON invoices(invoice_number);
+CREATE INDEX idx_invoices_outstanding ON invoices(hospital_id, status) WHERE outstanding_amount > 0;
+
+-- Invoice Line Items
+CREATE TABLE invoice_line_items (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+    charge_code_id UUID NOT NULL REFERENCES charge_codes(id),
+
+    line_number INTEGER NOT NULL,
+    description TEXT NOT NULL,
+    quantity DECIMAL(10,2) NOT NULL DEFAULT 1.00,
+    unit_price DECIMAL(12,2) NOT NULL,
+    discount_percentage DECIMAL(5,2) DEFAULT 0.00,
+    discount_amount DECIMAL(12,2) DEFAULT 0.00,
+    tax_rate DECIMAL(5,2) DEFAULT 0.00,
+    tax_amount DECIMAL(12,2) DEFAULT 0.00,
+    line_total DECIMAL(12,2) NOT NULL,
+
+    service_date DATE,
+    performed_by UUID REFERENCES users(id),
+
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+
+    UNIQUE(invoice_id, line_number),
+    CHECK (quantity > 0),
+    CHECK (unit_price >= 0),
+    CHECK (line_total >= 0)
+);
+
+CREATE INDEX idx_invoice_items_invoice ON invoice_line_items(invoice_id);
+CREATE INDEX idx_invoice_items_charge_code ON invoice_line_items(charge_code_id);
+
+-- Payments (read model)
+CREATE TABLE payments (
+    id UUID PRIMARY KEY,
+    current_version INT NOT NULL DEFAULT 0,
+    hospital_id UUID NOT NULL REFERENCES hospitals(id),
+    patient_id UUID NOT NULL REFERENCES patients(id),
+
+    payment_number VARCHAR(50) NOT NULL UNIQUE,
+    payment_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    payment_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    amount DECIMAL(12,2) NOT NULL,
+    payment_method VARCHAR(50) NOT NULL,
+        -- 'cash', 'card', 'upi', 'bank_transfer', 'cheque', 'insurance'
+
+    -- Payment details
+    reference_number TEXT,
+    card_last_4 VARCHAR(4),
+    upi_transaction_id TEXT,
+    cheque_number VARCHAR(50),
+    cheque_date DATE,
+    bank_name TEXT,
+
+    -- Status
+    status VARCHAR(50) NOT NULL DEFAULT 'received',
+        -- 'received', 'cleared', 'failed', 'refunded'
+
+    notes TEXT,
+
+    received_by UUID REFERENCES users(id),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    last_event_id UUID,
+
+    CHECK (amount > 0)
+);
+
+CREATE INDEX idx_payments_hospital ON payments(hospital_id);
+CREATE INDEX idx_payments_patient ON payments(patient_id, payment_date DESC);
+CREATE INDEX idx_payments_number ON payments(payment_number);
+CREATE INDEX idx_payments_method ON payments(payment_method);
+
+-- Payment Settlements (Allocation to Invoices)
+CREATE TABLE payment_settlements (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    payment_id UUID NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
+    invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+
+    allocated_amount DECIMAL(12,2) NOT NULL,
+    settlement_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    notes TEXT,
+
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    created_by UUID REFERENCES users(id),
+
+    CHECK (allocated_amount > 0)
+);
+
+CREATE INDEX idx_settlements_payment ON payment_settlements(payment_id);
+CREATE INDEX idx_settlements_invoice ON payment_settlements(invoice_id);
+
+-- =====================================================
+-- ADMISSION/DISCHARGE/TRANSFER (ADT) (Read Models)
+-- =====================================================
+
+-- Admissions (read model)
+CREATE TABLE admissions (
+    id UUID PRIMARY KEY,
+    current_version INT NOT NULL DEFAULT 0,
+    hospital_id UUID NOT NULL REFERENCES hospitals(id),
+    patient_id UUID NOT NULL REFERENCES patients(id),
+
+    admission_number VARCHAR(50) NOT NULL UNIQUE,
+    admission_date DATE NOT NULL,
+    admission_time TIMESTAMPTZ NOT NULL,
+
+    -- Current status
+    status VARCHAR(50) NOT NULL DEFAULT 'admitted',
+        -- 'admitted', 'discharged', 'transferred'
+
+    -- Room/bed information
+    current_ward TEXT,
+    current_room TEXT,
+    current_bed TEXT,
+
+    -- Care details
+    admitting_doctor_id UUID REFERENCES users(id),
+    attending_doctor_id UUID REFERENCES users(id),
+    admission_type VARCHAR(50), -- 'emergency', 'planned', 'transfer'
+    admission_reason TEXT,
+
+    -- Discharge information
+    discharge_date DATE,
+    discharge_time TIMESTAMPTZ,
+    discharge_summary TEXT,
+    discharge_instructions TEXT,
+    discharged_by UUID REFERENCES users(id),
+
+    -- Billing
+    invoice_id UUID REFERENCES invoices(id),
+
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    last_event_id UUID
+);
+
+CREATE INDEX idx_admissions_hospital ON admissions(hospital_id);
+CREATE INDEX idx_admissions_patient ON admissions(patient_id, admission_date DESC);
+CREATE INDEX idx_admissions_status ON admissions(status);
+CREATE INDEX idx_admissions_number ON admissions(admission_number);
+
+-- Room Assignments (history of room changes)
+CREATE TABLE room_assignments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    admission_id UUID NOT NULL REFERENCES admissions(id) ON DELETE CASCADE,
+    hospital_id UUID NOT NULL REFERENCES hospitals(id),
+
+    ward TEXT NOT NULL,
+    room TEXT NOT NULL,
+    bed TEXT,
+
+    assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    assigned_by UUID REFERENCES users(id),
+    vacated_at TIMESTAMPTZ,
+
+    charge_code_id UUID REFERENCES charge_codes(id),
+    daily_rate DECIMAL(12,2),
+
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_room_assignments_admission ON room_assignments(admission_id);
+CREATE INDEX idx_room_assignments_current ON room_assignments(admission_id) WHERE vacated_at IS NULL;
+
+-- ADT Integration Queue (for external HIS systems)
+CREATE TABLE adt_integration_queue (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    hospital_id UUID NOT NULL REFERENCES hospitals(id),
+
+    event_type VARCHAR(50) NOT NULL, -- 'A01', 'A02', 'A03' (HL7 ADT events)
+    event_data JSONB NOT NULL,
+
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+        -- 'pending', 'processing', 'completed', 'failed'
+
+    retry_count INTEGER DEFAULT 0,
+    max_retries INTEGER DEFAULT 3,
+    last_error TEXT,
+
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    processed_at TIMESTAMPTZ
+);
+
+CREATE INDEX idx_adt_queue_status ON adt_integration_queue(status, created_at);
+CREATE INDEX idx_adt_queue_hospital ON adt_integration_queue(hospital_id);
+
+-- ADT Dead Letter Queue (failed messages)
+CREATE TABLE adt_dead_letter_queue (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    hospital_id UUID NOT NULL REFERENCES hospitals(id),
+    original_queue_id UUID REFERENCES adt_integration_queue(id),
+
+    event_type VARCHAR(50) NOT NULL,
+    event_data JSONB NOT NULL,
+    failure_reason TEXT NOT NULL,
+    retry_count INTEGER NOT NULL,
+
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    resolved_at TIMESTAMPTZ,
+    resolved_by UUID REFERENCES users(id),
+    resolution_notes TEXT
+);
+
+CREATE INDEX idx_adt_dlq_unresolved ON adt_dead_letter_queue(hospital_id) WHERE resolved_at IS NULL;
 
 -- =====================================================
 -- SYSTEM TABLES (same as before)

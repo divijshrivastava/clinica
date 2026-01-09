@@ -6,7 +6,7 @@ import { useAuthStore } from './store/authStore'
 
 // Force initial hydration check
 const checkHydration = () => {
-  const stored = localStorage.getItem('clinica-auth')
+  const stored = localStorage.getItem('mymedic-auth')
   console.log('🔍 Initial hydration check:', stored)
   if (stored) {
     try {

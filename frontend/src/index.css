@@ -43,3 +43,144 @@ body {
   }
 }
 
+/* Fix input text visibility in light backgrounds */
+input[type="text"],
+input[type="email"],
+input[type="tel"],
+input[type="password"],
+select {
+  color: #111827 !important;
+}
+
+input[type="text"]::placeholder,
+input[type="email"]::placeholder,
+input[type="tel"]::placeholder,
+input[type="password"]::placeholder {
+  color: #9ca3af !important;
+}
+
+/* Additional input fixes for visibility */
+input,
+textarea,
+select {
+  color: #111827 !important;
+  -webkit-text-fill-color: #111827 !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #9ca3af !important;
+  -webkit-text-fill-color: #9ca3af !important;
+  opacity: 1 !important;
+}
+
+/* Ensure button text is visible */
+button {
+  color: inherit;
+  -webkit-text-fill-color: inherit;
+}
+
+/* Ensure all text in light backgrounds is visible */
+.bg-gray-50, .bg-white, .bg-purple-50, .bg-blue-50 {
+  color: #111827;
+}
+
+/* Ensure colored text remains colored */
+.text-purple-700, .text-blue-600, .text-green-600, .text-red-600 {
+  -webkit-text-fill-color: currentColor !important;
+}
+
+/* Comprehensive fix for light background pages */
+.bg-gray-50 *,
+.bg-white *,
+.bg-gray-100 * {
+  color: inherit;
+}
+
+.bg-gray-50,
+.bg-white,
+.bg-gray-100 {
+  color: #111827 !important;
+}
+
+/* Specific fix for buttons in light backgrounds - but not in dark nav bars */
+.bg-gray-50 button:not(.bg-slate-900 button):not([class*="bg-slate"]),
+.bg-white button:not(.bg-slate-900 button):not([class*="bg-slate"]),
+.bg-gray-100 button:not(.bg-slate-900 button):not([class*="bg-slate"]) {
+  color: #111827;
+  -webkit-text-fill-color: #111827;
+}
+
+/* Dark backgrounds should have light text */
+.bg-slate-900,
+.bg-slate-800,
+[class*="bg-slate"] {
+  color: inherit !important;
+}
+
+.bg-slate-900 *,
+.bg-slate-800 * {
+  color: inherit;
+}
+
+/* Preserve intentional text colors */
+.text-white { color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; }
+.text-gray-900 { color: #111827 !important; -webkit-text-fill-color: #111827 !important; }
+.text-gray-700 { color: #374151 !important; -webkit-text-fill-color: #374151 !important; }
+.text-gray-600 { color: #4b5563 !important; -webkit-text-fill-color: #4b5563 !important; }
+.text-gray-500 { color: #6b7280 !important; -webkit-text-fill-color: #6b7280 !important; }
+.text-gray-400 { color: #9ca3af !important; -webkit-text-fill-color: #9ca3af !important; }
+.text-gray-300 { color: #d1d5db !important; -webkit-text-fill-color: #d1d5db !important; }
+.text-purple-700 { color: #6d28d9 !important; -webkit-text-fill-color: #6d28d9 !important; }
+.text-purple-600 { color: #7c3aed !important; -webkit-text-fill-color: #7c3aed !important; }
+.text-blue-600 { color: #2563eb !important; -webkit-text-fill-color: #2563eb !important; }
+.text-green-600 { color: #16a34a !important; -webkit-text-fill-color: #16a34a !important; }
+.text-red-600 { color: #dc2626 !important; -webkit-text-fill-color: #dc2626 !important; }
+.text-primary-600 { color: #2563eb !important; -webkit-text-fill-color: #2563eb !important; }
+
+/* Fix for gradient backgrounds - ensure dark text (but only for light gradients) */
+[class*="bg-gradient"][class*="from-purple"],
+[class*="bg-gradient"][class*="from-blue"][class*="to-blue"] {
+  color: #111827 !important;
+}
+
+[class*="bg-gradient"][class*="from-purple"] *,
+[class*="bg-gradient"][class*="from-blue"][class*="to-blue"] * {
+  color: inherit;
+}
+
+[class*="bg-gradient"][class*="from-purple"] button,
+[class*="bg-gradient"][class*="from-blue"][class*="to-blue"] button {
+  color: #111827 !important;
+  -webkit-text-fill-color: #111827 !important;
+}
+
+/* Ensure buttons with border classes show dark text (but not in dark backgrounds) */
+.bg-gray-50 button[class*="border"],
+.bg-white button[class*="border"],
+.bg-gray-100 button[class*="border"] {
+  color: #111827;
+  -webkit-text-fill-color: #111827;
+}
+
+/* Override for buttons with explicit background colors */
+button.bg-purple-50 {
+  color: #6d28d9 !important;
+  -webkit-text-fill-color: #6d28d9 !important;
+}
+
+button.bg-blue-50 {
+  color: #2563eb !important;
+  -webkit-text-fill-color: #2563eb !important;
+}
+
+/* Ensure buttons are clickable */
+button {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+button:disabled {
+  pointer-events: none !important;
+  cursor: not-allowed !important;
+}

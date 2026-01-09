@@ -6,6 +6,7 @@ import rateLimit from "express-rate-limit";
 import { config } from "./config";
 import { logger } from "./utils/logger";
 import { commandBus } from "./event-sourcing/command-bus";
+import { eventStore } from "./event-sourcing/event-store";
 import { db } from "./database/pool";
 
 // Middleware
@@ -19,13 +20,17 @@ import {
 import authRouter from "./routes/auth";
 import commandsRouter from "./routes/commands";
 import healthRouter from "./routes/health";
+import onboardingRouter from "./routes/onboarding";
 import patientsRouter from "./routes/patients";
 import visitsRouter from "./routes/visits";
+import doctorsRouter from "./routes/doctors";
 import prescriptionsRouter from "./routes/prescriptions";
 import appointmentsRouter from "./routes/appointments";
 import medicalNotesRouter from "./routes/medical-notes";
 import documentsRouter from "./routes/documents";
 import templatesRouter from "./routes/templates";
+// import { initMigrationRoutes } from "./routes/migrations";
+// import { initBillingRoutes } from "./routes/billing";
 
 // Command Handlers
 import { registerPatientHandler } from "./commands/register-patient";
@@ -42,6 +47,8 @@ import { cancelAppointmentHandler } from "./commands/cancel-appointment";
 import { rescheduleAppointmentHandler } from "./commands/reschedule-appointment";
 import { createMedicalNoteHandler } from "./commands/create-medical-note";
 import { uploadDocumentHandler } from "./commands/upload-document";
+import { registerHospitalHandler } from "./commands/register-hospital";
+import { createUserHandler } from "./commands/create-user";
 
 // Projection Handlers
 import { eventDispatcher } from "./projections/event-dispatcher";
@@ -51,6 +58,9 @@ import { prescriptionProjectionHandler } from "./projections/handlers/prescripti
 import { appointmentProjectionHandler } from "./projections/handlers/appointment-projection";
 import { medicalNoteProjectionHandler } from "./projections/handlers/medical-note-projection";
 import { documentProjectionHandler } from "./projections/handlers/document-projection";
+import { HospitalProjectionHandler } from "./projections/handlers/hospital-projection";
+import { UserProjectionHandler } from "./projections/handlers/user-projection";
+// import { BillingProjectionHandler } from "./projections/handlers/billing-projection";
 import { projectionWorker } from "./projections/projection-worker";
 
 /**
@@ -87,14 +97,18 @@ export function createApp(): Application {
   // Routes
   app.use("/health", healthRouter);
   app.use("/auth", authRouter);
+  app.use("/onboarding", onboardingRouter);
   app.use("/commands", commandsRouter);
   app.use("/patients", patientsRouter);
   app.use("/visits", visitsRouter);
+  app.use("/doctors", doctorsRouter);
   app.use("/prescriptions", prescriptionsRouter);
   app.use("/appointments", appointmentsRouter);
   app.use("/medical-notes", medicalNotesRouter);
   app.use("/documents", documentsRouter);
   app.use("/templates", templatesRouter);
+  // app.use("/migrations", initMigrationRoutes(db, eventStore));
+  // app.use("/billing", initBillingRoutes(db, eventStore));
 
   // 404 handler
   app.use(notFoundHandler);
@@ -112,6 +126,8 @@ function registerCommandHandlers(): void {
   logger.info("Registering command handlers...");
 
   // Register command handlers
+  commandBus.registerHandler(registerHospitalHandler);
+  commandBus.registerHandler(createUserHandler);
   commandBus.registerHandler(registerPatientHandler);
   commandBus.registerHandler(updatePatientContactHandler);
   commandBus.registerHandler(updatePatientDemographicsHandler);
@@ -141,12 +157,19 @@ function registerProjectionHandlers(): void {
   logger.info("Registering projection handlers...");
 
   // Register projection handlers
+  const hospitalProjectionHandler = new HospitalProjectionHandler();
+  const userProjectionHandler = new UserProjectionHandler();
+  // const billingProjectionHandler = new BillingProjectionHandler(db);
+
+  eventDispatcher.registerHandler(hospitalProjectionHandler);
+  eventDispatcher.registerHandler(userProjectionHandler);
   eventDispatcher.registerHandler(patientProjectionHandler);
   eventDispatcher.registerHandler(visitProjectionHandler);
   eventDispatcher.registerHandler(prescriptionProjectionHandler);
   eventDispatcher.registerHandler(appointmentProjectionHandler);
   eventDispatcher.registerHandler(medicalNoteProjectionHandler);
   eventDispatcher.registerHandler(documentProjectionHandler);
+  // eventDispatcher.registerHandler(billingProjectionHandler);
 
   // Log registered handlers
   const handlers = eventDispatcher.getHandlers();
@@ -176,7 +199,7 @@ async function start(): Promise<void> {
       logger.warn(
         "⚠️  event_store table not found. Did you run the schema migration?"
       );
-      logger.warn("   Run: psql -U postgres -d clinica_dev -f ../schema.sql");
+      logger.warn("   Run: psql -U postgres -d mymedic_dev -f ../schema.sql");
     }
 
     // Register command handlers
@@ -200,7 +223,7 @@ async function start(): Promise<void> {
       logger.info(
         "═══════════════════════════════════════════════════════════"
       );
-      logger.info("🚀 Clinica Backend Server Started");
+      logger.info("🚀 MyMedic Backend Server Started");
       logger.info(
         "═══════════════════════════════════════════════════════════"
       );

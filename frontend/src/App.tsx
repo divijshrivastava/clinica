@@ -4,11 +4,17 @@ import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import { useAuthStore } from './store/authStore'
 import LoginPage from './pages/LoginPage'
+import SignupPage from './pages/SignupPage'
+import DoctorOnboarding from './pages/onboarding/DoctorOnboarding'
+import ClinicOnboarding from './pages/onboarding/ClinicOnboarding'
+import HospitalOnboarding from './pages/onboarding/HospitalOnboarding'
+import OnboardingPage from './pages/OnboardingPage'
 import Dashboard from './pages/Dashboard'
 import PatientsPage from './pages/PatientsPage'
 import PatientDetailPage from './pages/PatientDetailPage'
 import VisitsPage from './pages/VisitsPage'
 import VisitDetailPage from './pages/VisitDetailPage'
+import DoctorDetailPage from './pages/DoctorDetailPage'
 import PrescriptionsPage from './pages/PrescriptionsPage'
 import PrescriptionDetailPage from './pages/PrescriptionDetailPage'
 import AppointmentsPage from './pages/AppointmentsPage'
@@ -29,7 +35,7 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
     }
     
     // If not hydrated yet, check localStorage directly as fallback
-    const stored = localStorage.getItem('clinica-auth')
+    const stored = localStorage.getItem('mymedic-auth')
     if (stored) {
       try {
         const parsed = JSON.parse(stored)
@@ -79,6 +85,11 @@ function App() {
   return (
     <Router>
       <Routes>
+        <Route path="/signup" element={<SignupPage />} />
+        <Route path="/onboarding/doctor" element={<DoctorOnboarding />} />
+        <Route path="/onboarding/clinic" element={<ClinicOnboarding />} />
+        <Route path="/onboarding/hospital" element={<HospitalOnboarding />} />
+        <Route path="/onboarding" element={<OnboardingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route
           path="/"
@@ -93,6 +104,7 @@ function App() {
           <Route path="patients/:id" element={<PatientDetailPage />} />
           <Route path="visits" element={<VisitsPage />} />
           <Route path="visits/:id" element={<VisitDetailPage />} />
+          <Route path="doctors/:id" element={<DoctorDetailPage />} />
           <Route path="prescriptions" element={<PrescriptionsPage />} />
           <Route path="prescriptions/:id" element={<PrescriptionDetailPage />} />
           <Route path="appointments" element={<AppointmentsPage />} />

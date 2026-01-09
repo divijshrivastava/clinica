@@ -12,6 +12,7 @@ export default function VisitsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [visits, setVisits] = useState<Visit[]>([])
   const [patients, setPatients] = useState<Patient[]>([])
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null)
   const [loading, setLoading] = useState(true)
   const [showScheduleModal, setShowScheduleModal] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -125,9 +126,6 @@ export default function VisitsPage() {
       setSubmitting(false)
     }
   }
-
-  const selectedPatientId = watch('patient_id')
-  const selectedPatient = patients.find(p => p.id === selectedPatientId)
 
   return (
     <div className="space-y-6">
