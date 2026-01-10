@@ -21,6 +21,10 @@ import AppointmentsPage from './pages/AppointmentsPage'
 import AppointmentDetailPage from './pages/AppointmentDetailPage'
 import MedicalNotesPage from './pages/MedicalNotesPage'
 import DocumentsPage from './pages/DocumentsPage'
+import DoctorProfilesPage from './pages/DoctorProfilesPage'
+import DoctorProfileDetailPage from './pages/DoctorProfileDetailPage'
+import DoctorScheduleEditorPage from './pages/DoctorScheduleEditorPage'
+import SlotAvailabilityPage from './pages/SlotAvailabilityPage'
 import Layout from './components/Layout'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -111,6 +115,10 @@ function App() {
           <Route path="appointments/:id" element={<AppointmentDetailPage />} />
           <Route path="notes" element={<MedicalNotesPage />} />
           <Route path="documents" element={<DocumentsPage />} />
+          <Route path="doctor-profiles" element={<DoctorProfilesPage />} />
+          <Route path="doctor-profiles/:id" element={<DoctorProfileDetailPage />} />
+          <Route path="doctor-profiles/:id/schedule" element={<DoctorScheduleEditorPage />} />
+          <Route path="slots" element={<SlotAvailabilityPage />} />
         </Route>
       </Routes>
       <ToastContainer

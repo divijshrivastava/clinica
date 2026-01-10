@@ -11,13 +11,17 @@ import {
   FiLogOut,
   FiMenu,
   FiX,
-  FiSearch
+  FiSearch,
+  FiUserCheck,
+  FiClock
 } from 'react-icons/fi'
 import { useState } from 'react'
 
 const navigation = [
   { name: 'Overview', href: '/', icon: FiHome },
   { name: 'Patients', href: '/patients', icon: FiUsers },
+  { name: 'Doctors', href: '/doctor-profiles', icon: FiUserCheck },
+  { name: 'Available Slots', href: '/slots', icon: FiClock },
   { name: 'Visits', href: '/visits', icon: FiCalendar },
   { name: 'Appointments', href: '/appointments', icon: FiActivity },
   { name: 'Prescriptions', href: '/prescriptions', icon: FiFileText },
