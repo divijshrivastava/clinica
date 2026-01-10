@@ -29,6 +29,10 @@ import appointmentsRouter from "./routes/appointments";
 import medicalNotesRouter from "./routes/medical-notes";
 import documentsRouter from "./routes/documents";
 import templatesRouter from "./routes/templates";
+import doctorProfilesRouter from "./routes/doctor-profiles";
+import doctorSchedulesRouter from "./routes/doctor-schedules";
+import leaveRequestsRouter from "./routes/leave-requests";
+import appointmentSlotsRouter from "./routes/appointment-slots";
 // import { initMigrationRoutes } from "./routes/migrations";
 // import { initBillingRoutes } from "./routes/billing";
 
@@ -49,6 +53,22 @@ import { createMedicalNoteHandler } from "./commands/create-medical-note";
 import { uploadDocumentHandler } from "./commands/upload-document";
 import { registerHospitalHandler } from "./commands/register-hospital";
 import { createUserHandler } from "./commands/create-user";
+import { createDoctorProfileHandler } from "./commands/create-doctor-profile";
+import { updateDoctorFeesHandler } from "./commands/update-doctor-fees";
+import { createBaseScheduleHandler } from "./commands/create-base-schedule";
+import { assignDoctorToDepartmentHandler } from "./commands/assign-doctor-to-department";
+import { assignDoctorToLocationHandler } from "./commands/assign-doctor-to-location";
+import { activateDoctorHandler } from "./commands/activate-doctor";
+import { addScheduleOverrideHandler } from "./commands/add-schedule-override";
+import { requestLeaveHandler } from "./commands/request-leave";
+import { approveLeaveHandler } from "./commands/approve-leave";
+import { rejectLeaveHandler } from "./commands/reject-leave";
+import { addForcedBlockHandler } from "./commands/add-forced-block";
+import { createTentativeHoldHandler } from "./commands/create-tentative-hold";
+import { releaseTentativeHoldHandler } from "./commands/release-tentative-hold";
+import { blockSlotHandler } from "./commands/block-slot";
+import { createRoomHandler } from "./commands/create-room";
+import { createEquipmentHandler } from "./commands/create-equipment";
 
 // Projection Handlers
 import { eventDispatcher } from "./projections/event-dispatcher";
@@ -107,6 +127,10 @@ export function createApp(): Application {
   app.use("/medical-notes", medicalNotesRouter);
   app.use("/documents", documentsRouter);
   app.use("/templates", templatesRouter);
+  app.use("/doctor-profiles", doctorProfilesRouter);
+  app.use("/doctor-schedules", doctorSchedulesRouter);
+  app.use("/leave-requests", leaveRequestsRouter);
+  app.use("/appointment-slots", appointmentSlotsRouter);
   // app.use("/migrations", initMigrationRoutes(db, eventStore));
   // app.use("/billing", initBillingRoutes(db, eventStore));
 
@@ -142,6 +166,24 @@ function registerCommandHandlers(): void {
   commandBus.registerHandler(rescheduleAppointmentHandler);
   commandBus.registerHandler(createMedicalNoteHandler);
   commandBus.registerHandler(uploadDocumentHandler);
+  
+  // Doctor scheduling command handlers
+  commandBus.registerHandler(createDoctorProfileHandler);
+  commandBus.registerHandler(updateDoctorFeesHandler);
+  commandBus.registerHandler(createBaseScheduleHandler);
+  commandBus.registerHandler(assignDoctorToDepartmentHandler);
+  commandBus.registerHandler(assignDoctorToLocationHandler);
+  commandBus.registerHandler(activateDoctorHandler);
+  commandBus.registerHandler(addScheduleOverrideHandler);
+  commandBus.registerHandler(requestLeaveHandler);
+  commandBus.registerHandler(approveLeaveHandler);
+  commandBus.registerHandler(rejectLeaveHandler);
+  commandBus.registerHandler(addForcedBlockHandler);
+  commandBus.registerHandler(createTentativeHoldHandler);
+  commandBus.registerHandler(releaseTentativeHoldHandler);
+  commandBus.registerHandler(blockSlotHandler);
+  commandBus.registerHandler(createRoomHandler);
+  commandBus.registerHandler(createEquipmentHandler);
 
   // Log registered handlers
   const handlers = commandBus.getHandlers();

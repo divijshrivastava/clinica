@@ -1,0 +1,226 @@
+import { Router, Request, Response } from 'express';
+import { db } from '../database/pool';
+import { asyncHandler } from '../middleware/error-handler';
+import { authenticate } from '../middleware/auth';
+import { commandBus } from '../event-sourcing/command-bus';
+
+const router = Router();
+
+// All routes require authentication
+router.use(authenticate);
+
+/**
+ * POST /leave-requests
+ * Submit a leave request
+ */
+router.post(
+  '/',
+  asyncHandler(async (req: Request, res: Response) => {
+    const hospitalId = req.get('X-Hospital-ID');
+    const userId = (req as any).user?.id;
+
+    if (!hospitalId) {
+      return res.status(400).json({
+        error: { code: 'MISSING_HOSPITAL_ID', message: 'Hospital ID is required' },
+      });
+    }
+
+    const result = await commandBus.execute({
+      command_type: 'request-leave',
+      command_id: crypto.randomUUID(),
+      payload: req.body,
+      metadata: {
+        hospital_id: hospitalId,
+        user_id: userId,
+        client_ip: req.ip,
+        user_agent: req.get('User-Agent'),
+      },
+      idempotency_key: req.get('Idempotency-Key'),
+    });
+
+    res.status(201).json({
+      leave_request_id: result.aggregate_id,
+      version: result.aggregate_version,
+    });
+  })
+);
+
+/**
+ * GET /leave-requests
+ * List leave requests
+ */
+router.get(
+  '/',
+  asyncHandler(async (req: Request, res: Response) => {
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+    const offset = parseInt(req.query.offset as string) || 0;
+    const hospitalId = req.get('X-Hospital-ID');
+    const doctor_profile_id = req.query.doctor_profile_id as string;
+    const status = req.query.status as string;
+
+    const conditions: string[] = ['deleted_at IS NULL'];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (hospitalId) {
+      conditions.push(`hospital_id = $${paramIndex++}`);
+      params.push(hospitalId);
+    }
+
+    if (doctor_profile_id) {
+      conditions.push(`doctor_profile_id = $${paramIndex++}`);
+      params.push(doctor_profile_id);
+    }
+
+    if (status) {
+      conditions.push(`status = $${paramIndex++}`);
+      params.push(status);
+    }
+
+    const whereClause = `WHERE ${conditions.join(' AND ')}`;
+
+    // Get total count
+    const countResult = await db.query(
+      `SELECT COUNT(*) as total FROM leave_requests ${whereClause}`,
+      params
+    );
+    const total = parseInt(countResult.rows[0].total);
+
+    // Get leave requests
+    params.push(limit);
+    params.push(offset);
+
+    const result = await db.query(
+      `SELECT
+        lr.*,
+        dp.display_name as doctor_name
+      FROM leave_requests lr
+      LEFT JOIN doctor_profiles dp ON dp.id = lr.doctor_profile_id
+      ${whereClause}
+      ORDER BY lr.created_at DESC
+      LIMIT $${paramIndex++} OFFSET $${paramIndex++}`,
+      params
+    );
+
+    res.json({
+      data: result.rows,
+      pagination: {
+        total,
+        limit,
+        offset,
+        has_more: offset + limit < total,
+      },
+    });
+  })
+);
+
+/**
+ * GET /leave-requests/:id
+ * Get a specific leave request
+ */
+router.get(
+  '/:id',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+
+    const result = await db.query(
+      `SELECT
+        lr.*,
+        dp.display_name as doctor_name
+      FROM leave_requests lr
+      LEFT JOIN doctor_profiles dp ON dp.id = lr.doctor_profile_id
+      WHERE lr.id = $1 AND lr.deleted_at IS NULL`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        error: { code: 'LEAVE_REQUEST_NOT_FOUND', message: 'Leave request not found' },
+      });
+    }
+
+    res.json(result.rows[0]);
+  })
+);
+
+/**
+ * POST /leave-requests/:id/approve
+ * Approve a leave request
+ */
+router.post(
+  '/:id/approve',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const hospitalId = req.get('X-Hospital-ID');
+    const userId = (req as any).user?.id;
+
+    if (!hospitalId) {
+      return res.status(400).json({
+        error: { code: 'MISSING_HOSPITAL_ID', message: 'Hospital ID is required' },
+      });
+    }
+
+    const result = await commandBus.execute({
+      command_type: 'approve-leave',
+      command_id: crypto.randomUUID(),
+      payload: {
+        leave_request_id: id,
+        ...req.body,
+      },
+      metadata: {
+        hospital_id: hospitalId,
+        user_id: userId,
+        client_ip: req.ip,
+        user_agent: req.get('User-Agent'),
+      },
+      idempotency_key: req.get('Idempotency-Key'),
+    });
+
+    res.json({
+      leave_request_id: result.aggregate_id,
+      version: result.aggregate_version,
+    });
+  })
+);
+
+/**
+ * POST /leave-requests/:id/reject
+ * Reject a leave request
+ */
+router.post(
+  '/:id/reject',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const hospitalId = req.get('X-Hospital-ID');
+    const userId = (req as any).user?.id;
+
+    if (!hospitalId) {
+      return res.status(400).json({
+        error: { code: 'MISSING_HOSPITAL_ID', message: 'Hospital ID is required' },
+      });
+    }
+
+    const result = await commandBus.execute({
+      command_type: 'reject-leave',
+      command_id: crypto.randomUUID(),
+      payload: {
+        leave_request_id: id,
+        ...req.body,
+      },
+      metadata: {
+        hospital_id: hospitalId,
+        user_id: userId,
+        client_ip: req.ip,
+        user_agent: req.get('User-Agent'),
+      },
+      idempotency_key: req.get('Idempotency-Key'),
+    });
+
+    res.json({
+      leave_request_id: result.aggregate_id,
+      version: result.aggregate_version,
+    });
+  })
+);
+
+export default router;

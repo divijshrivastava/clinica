@@ -1,0 +1,385 @@
+import { Router, Request, Response } from 'express';
+import { db } from '../database/pool';
+import { asyncHandler } from '../middleware/error-handler';
+import { authenticate } from '../middleware/auth';
+import { commandBus } from '../event-sourcing/command-bus';
+import { bookabilityService } from '../services/bookability-service';
+import { slotGenerationService } from '../services/slot-generation-service';
+
+const router = Router();
+
+// All routes require authentication
+router.use(authenticate);
+
+/**
+ * POST /doctor-profiles
+ * Create a new doctor profile
+ */
+router.post(
+  '/',
+  asyncHandler(async (req: Request, res: Response) => {
+    const hospitalId = req.get('X-Hospital-ID');
+    const userId = (req as any).user?.id;
+
+    if (!hospitalId) {
+      return res.status(400).json({
+        error: { code: 'MISSING_HOSPITAL_ID', message: 'Hospital ID is required' },
+      });
+    }
+
+    const result = await commandBus.execute({
+      command_type: 'create-doctor-profile',
+      command_id: crypto.randomUUID(),
+      payload: req.body,
+      metadata: {
+        hospital_id: hospitalId,
+        user_id: userId,
+        client_ip: req.ip,
+        user_agent: req.get('User-Agent'),
+      },
+      idempotency_key: req.get('Idempotency-Key'),
+    });
+
+    res.status(201).json({
+      doctor_profile_id: result.aggregate_id,
+      version: result.aggregate_version,
+    });
+  })
+);
+
+/**
+ * GET /doctor-profiles
+ * List all doctor profiles with filtering
+ */
+router.get(
+  '/',
+  asyncHandler(async (req: Request, res: Response) => {
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+    const offset = parseInt(req.query.offset as string) || 0;
+    const hospitalId = req.get('X-Hospital-ID');
+    const status = req.query.status as string;
+    const specialty = req.query.specialty as string;
+    const location_id = req.query.location_id as string;
+    const is_bookable = req.query.is_bookable as string;
+
+    const conditions: string[] = ['deleted_at IS NULL'];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (hospitalId) {
+      conditions.push(`hospital_id = $${paramIndex++}`);
+      params.push(hospitalId);
+    }
+
+    if (status) {
+      conditions.push(`status = $${paramIndex++}`);
+      params.push(status);
+    }
+
+    if (specialty) {
+      conditions.push(`specialties @> $${paramIndex++}::jsonb`);
+      params.push(JSON.stringify([specialty]));
+    }
+
+    if (location_id) {
+      conditions.push(
+        `id IN (SELECT doctor_profile_id FROM doctor_location_assignments WHERE location_id = $${paramIndex++} AND removed_at IS NULL)`
+      );
+      params.push(location_id);
+    }
+
+    if (is_bookable === 'true') {
+      conditions.push(`is_bookable = TRUE`);
+    }
+
+    const whereClause = `WHERE ${conditions.join(' AND ')}`;
+
+    // Get total count
+    const countResult = await db.query(
+      `SELECT COUNT(*) as total FROM doctor_profiles ${whereClause}`,
+      params
+    );
+    const total = parseInt(countResult.rows[0].total);
+
+    // Get doctor profiles
+    params.push(limit);
+    params.push(offset);
+
+    const result = await db.query(
+      `SELECT
+        id,
+        hospital_id,
+        user_id,
+        display_name,
+        salutation,
+        bio,
+        profile_image_url,
+        years_of_experience,
+        registration_number,
+        license_number,
+        license_expiry_date,
+        license_verified,
+        specialties,
+        qualifications,
+        languages,
+        consultation_modes,
+        status,
+        is_bookable,
+        accepts_online_bookings,
+        public_profile_visible,
+        bookability_score,
+        consultation_fee,
+        follow_up_fee,
+        tele_consultation_fee,
+        currency,
+        tags,
+        created_at,
+        updated_at
+      FROM doctor_profiles
+      ${whereClause}
+      ORDER BY display_name ASC
+      LIMIT $${paramIndex++} OFFSET $${paramIndex++}`,
+      params
+    );
+
+    res.json({
+      data: result.rows,
+      pagination: {
+        total,
+        limit,
+        offset,
+        has_more: offset + limit < total,
+      },
+    });
+  })
+);
+
+/**
+ * GET /doctor-profiles/:id
+ * Get a single doctor profile
+ */
+router.get(
+  '/:id',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+
+    const result = await db.query(
+      `SELECT
+        dp.*,
+        (SELECT json_agg(json_build_object(
+          'department_id', d.id,
+          'department_name', d.name,
+          'allocation_percentage', dda.allocation_percentage,
+          'is_primary', dda.is_primary
+        ))
+        FROM doctor_department_assignments dda
+        JOIN departments d ON d.id = dda.department_id
+        WHERE dda.doctor_profile_id = dp.id AND dda.deleted_at IS NULL
+        ) as departments,
+        (SELECT json_agg(json_build_object(
+          'location_id', l.id,
+          'location_name', l.name,
+          'is_primary', dla.is_primary
+        ))
+        FROM doctor_location_assignments dla
+        JOIN locations l ON l.id = dla.location_id
+        WHERE dla.doctor_profile_id = dp.id AND dla.removed_at IS NULL
+        ) as locations
+      FROM doctor_profiles dp
+      WHERE dp.id = $1 AND dp.deleted_at IS NULL`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        error: { code: 'DOCTOR_NOT_FOUND', message: 'Doctor profile not found' },
+      });
+    }
+
+    res.json(result.rows[0]);
+  })
+);
+
+/**
+ * PUT /doctor-profiles/:id/fees
+ * Update doctor consultation fees
+ */
+router.put(
+  '/:id/fees',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const hospitalId = req.get('X-Hospital-ID');
+    const userId = (req as any).user?.id;
+
+    const result = await commandBus.execute({
+      command_type: 'update-doctor-fees',
+      command_id: crypto.randomUUID(),
+      payload: {
+        doctor_profile_id: id,
+        ...req.body,
+      },
+      metadata: {
+        hospital_id: hospitalId,
+        user_id: userId,
+        client_ip: req.ip,
+        user_agent: req.get('User-Agent'),
+      },
+      idempotency_key: req.get('Idempotency-Key'),
+    });
+
+    res.json({
+      doctor_profile_id: result.aggregate_id,
+      version: result.aggregate_version,
+    });
+  })
+);
+
+/**
+ * POST /doctor-profiles/:id/departments
+ * Assign doctor to a department
+ */
+router.post(
+  '/:id/departments',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const hospitalId = req.get('X-Hospital-ID');
+    const userId = (req as any).user?.id;
+
+    const result = await commandBus.execute({
+      command_type: 'assign-doctor-to-department',
+      command_id: crypto.randomUUID(),
+      payload: {
+        doctor_profile_id: id,
+        ...req.body,
+      },
+      metadata: {
+        hospital_id: hospitalId,
+        user_id: userId,
+        client_ip: req.ip,
+        user_agent: req.get('User-Agent'),
+      },
+      idempotency_key: req.get('Idempotency-Key'),
+    });
+
+    res.json({
+      doctor_profile_id: result.aggregate_id,
+      version: result.aggregate_version,
+    });
+  })
+);
+
+/**
+ * POST /doctor-profiles/:id/locations
+ * Assign doctor to a location
+ */
+router.post(
+  '/:id/locations',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const hospitalId = req.get('X-Hospital-ID');
+    const userId = (req as any).user?.id;
+
+    const result = await commandBus.execute({
+      command_type: 'assign-doctor-to-location',
+      command_id: crypto.randomUUID(),
+      payload: {
+        doctor_profile_id: id,
+        ...req.body,
+      },
+      metadata: {
+        hospital_id: hospitalId,
+        user_id: userId,
+        client_ip: req.ip,
+        user_agent: req.get('User-Agent'),
+      },
+      idempotency_key: req.get('Idempotency-Key'),
+    });
+
+    res.json({
+      doctor_profile_id: result.aggregate_id,
+      version: result.aggregate_version,
+    });
+  })
+);
+
+/**
+ * POST /doctor-profiles/:id/activate
+ * Activate a doctor profile
+ */
+router.post(
+  '/:id/activate',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const hospitalId = req.get('X-Hospital-ID');
+    const userId = (req as any).user?.id;
+
+    const result = await commandBus.execute({
+      command_type: 'activate-doctor',
+      command_id: crypto.randomUUID(),
+      payload: {
+        doctor_profile_id: id,
+        ...req.body,
+      },
+      metadata: {
+        hospital_id: hospitalId,
+        user_id: userId,
+        client_ip: req.ip,
+        user_agent: req.get('User-Agent'),
+      },
+      idempotency_key: req.get('Idempotency-Key'),
+    });
+
+    res.json({
+      doctor_profile_id: result.aggregate_id,
+      version: result.aggregate_version,
+    });
+  })
+);
+
+/**
+ * GET /doctor-profiles/:id/bookability
+ * Check doctor bookability status
+ */
+router.get(
+  '/:id/bookability',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const hospitalId = req.get('X-Hospital-ID');
+
+    if (!hospitalId) {
+      return res.status(400).json({
+        error: { code: 'MISSING_HOSPITAL_ID', message: 'Hospital ID is required' },
+      });
+    }
+
+    const bookabilityCheck = await bookabilityService.evaluateBookability(id, hospitalId);
+    res.json(bookabilityCheck);
+  })
+);
+
+/**
+ * POST /doctor-profiles/:id/regenerate-slots
+ * Regenerate appointment slots for a doctor
+ */
+router.post(
+  '/:id/regenerate-slots',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const hospitalId = req.get('X-Hospital-ID');
+
+    if (!hospitalId) {
+      return res.status(400).json({
+        error: { code: 'MISSING_HOSPITAL_ID', message: 'Hospital ID is required' },
+      });
+    }
+
+    const slotsGenerated = await slotGenerationService.regenerateSlotsForDoctor(id, hospitalId);
+
+    res.json({
+      doctor_profile_id: id,
+      slots_generated: slotsGenerated,
+    });
+  })
+);
+
+export default router;

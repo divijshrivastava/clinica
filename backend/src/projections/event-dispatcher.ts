@@ -155,3 +155,33 @@ class EventDispatcher {
 
 // Export singleton instance
 export const eventDispatcher = new EventDispatcher();
+
+// Register projection handlers
+import { PatientProjectionHandler } from './handlers/patient-projection';
+import { VisitProjectionHandler } from './handlers/visit-projection';
+import { AppointmentProjectionHandler } from './handlers/appointment-projection';
+import { PrescriptionProjectionHandler } from './handlers/prescription-projection';
+import { MedicalNoteProjectionHandler } from './handlers/medical-note-projection';
+import { DocumentProjectionHandler } from './handlers/document-projection';
+import { UserProjectionHandler } from './handlers/user-projection';
+import { HospitalProjectionHandler } from './handlers/hospital-projection';
+import { DoctorProfileProjectionHandler } from './handlers/doctor-profile-projection';
+import { DoctorScheduleProjectionHandler } from './handlers/doctor-schedule-projection';
+import { LeaveRequestProjectionHandler } from './handlers/leave-request-projection';
+import { AppointmentSlotProjectionHandler } from './handlers/appointment-slot-projection';
+import { ResourceProjectionHandler } from './handlers/resource-projection';
+
+// Register all handlers
+eventDispatcher.registerHandler(new PatientProjectionHandler());
+eventDispatcher.registerHandler(new VisitProjectionHandler());
+eventDispatcher.registerHandler(new AppointmentProjectionHandler());
+eventDispatcher.registerHandler(new PrescriptionProjectionHandler());
+eventDispatcher.registerHandler(new MedicalNoteProjectionHandler());
+eventDispatcher.registerHandler(new DocumentProjectionHandler());
+eventDispatcher.registerHandler(new UserProjectionHandler());
+eventDispatcher.registerHandler(new HospitalProjectionHandler());
+eventDispatcher.registerHandler(new DoctorProfileProjectionHandler());
+eventDispatcher.registerHandler(new DoctorScheduleProjectionHandler());
+eventDispatcher.registerHandler(new LeaveRequestProjectionHandler());
+eventDispatcher.registerHandler(new AppointmentSlotProjectionHandler());
+eventDispatcher.registerHandler(new ResourceProjectionHandler());
