@@ -60,10 +60,7 @@ export class HoldReleaseService {
     logger.info('Releasing hold', { hold_id: holdId, release_reason: releaseReason });
 
     // Get current version of hold
-    const events = await eventStore.getEvents({
-      aggregate_id: holdId,
-      aggregate_type: 'appointment_slot',
-    });
+    const events = await eventStore.getAggregateEvents(holdId);
 
     if (events.length === 0) {
       throw new Error(`Hold ${holdId} not found in event store`);

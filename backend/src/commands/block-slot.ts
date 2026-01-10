@@ -39,10 +39,7 @@ export const blockSlotHandler: CommandHandler<BlockSlotPayload> = {
     }
 
     // Get current version of slot aggregate
-    const events = await eventStore.getEvents({
-      aggregate_id: command.payload.slot_id,
-      aggregate_type: 'appointment_slot',
-    });
+    const events = await eventStore.getAggregateEvents(command.payload.slot_id);
 
     if (events.length === 0) {
       throw new Error(`Slot ${command.payload.slot_id} not found`);

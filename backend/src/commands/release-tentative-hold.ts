@@ -40,10 +40,7 @@ export const releaseTentativeHoldHandler: CommandHandler<ReleaseTentativeHoldPay
     }
 
     // Get current version of hold aggregate
-    const events = await eventStore.getEvents({
-      aggregate_id: command.payload.hold_id,
-      aggregate_type: 'appointment_slot',
-    });
+    const events = await eventStore.getAggregateEvents(command.payload.hold_id);
 
     if (events.length === 0) {
       throw new Error(`Hold ${command.payload.hold_id} not found`);

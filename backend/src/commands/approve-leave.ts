@@ -38,10 +38,7 @@ export const approveLeaveHandler: CommandHandler<ApproveLeavePayload> = {
     }
 
     // Get current version of leave request aggregate
-    const events = await eventStore.getEvents({
-      aggregate_id: command.payload.leave_request_id,
-      aggregate_type: 'leave_request',
-    });
+    const events = await eventStore.getAggregateEvents(command.payload.leave_request_id);
 
     if (events.length === 0) {
       throw new Error(`Leave request ${command.payload.leave_request_id} not found`);

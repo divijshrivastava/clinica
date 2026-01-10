@@ -42,10 +42,7 @@ export const activateDoctorHandler: CommandHandler<ActivateDoctorPayload> = {
     }
 
     // Get current version of doctor profile aggregate
-    const events = await eventStore.getEvents({
-      aggregate_id: command.payload.doctor_profile_id,
-      aggregate_type: 'doctor_profile',
-    });
+    const events = await eventStore.getAggregateEvents(command.payload.doctor_profile_id);
 
     if (events.length === 0) {
       throw new Error(`Doctor profile ${command.payload.doctor_profile_id} not found`);
