@@ -25,7 +25,7 @@ router.post(
       });
     }
 
-    const result = await commandBus.execute({
+    const result = await commandBus.handle({
       command_type: 'request-leave',
       command_id: crypto.randomUUID(),
       payload: req.body,
@@ -160,7 +160,7 @@ router.post(
       });
     }
 
-    const result = await commandBus.execute({
+    const result = await commandBus.handle({
       command_type: 'approve-leave',
       command_id: crypto.randomUUID(),
       payload: {
@@ -200,7 +200,7 @@ router.post(
       });
     }
 
-    const result = await commandBus.execute({
+    const result = await commandBus.handle({
       command_type: 'reject-leave',
       command_id: crypto.randomUUID(),
       payload: {

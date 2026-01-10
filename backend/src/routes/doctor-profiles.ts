@@ -27,7 +27,7 @@ router.post(
       });
     }
 
-    const result = await commandBus.execute({
+    const result = await commandBus.handle({
       command_type: 'create-doctor-profile',
       command_id: crypto.randomUUID(),
       payload: req.body,
@@ -211,7 +211,7 @@ router.put(
     const hospitalId = req.get('X-Hospital-ID');
     const userId = (req as any).user?.id;
 
-    const result = await commandBus.execute({
+    const result = await commandBus.handle({
       command_type: 'update-doctor-fees',
       command_id: crypto.randomUUID(),
       payload: {
@@ -245,7 +245,7 @@ router.post(
     const hospitalId = req.get('X-Hospital-ID');
     const userId = (req as any).user?.id;
 
-    const result = await commandBus.execute({
+    const result = await commandBus.handle({
       command_type: 'assign-doctor-to-department',
       command_id: crypto.randomUUID(),
       payload: {
@@ -279,7 +279,7 @@ router.post(
     const hospitalId = req.get('X-Hospital-ID');
     const userId = (req as any).user?.id;
 
-    const result = await commandBus.execute({
+    const result = await commandBus.handle({
       command_type: 'assign-doctor-to-location',
       command_id: crypto.randomUUID(),
       payload: {
@@ -313,7 +313,7 @@ router.post(
     const hospitalId = req.get('X-Hospital-ID');
     const userId = (req as any).user?.id;
 
-    const result = await commandBus.execute({
+    const result = await commandBus.handle({
       command_type: 'activate-doctor',
       command_id: crypto.randomUUID(),
       payload: {

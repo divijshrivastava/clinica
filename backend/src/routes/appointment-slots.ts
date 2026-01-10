@@ -154,7 +154,7 @@ router.post(
       });
     }
 
-    const result = await commandBus.execute({
+    const result = await commandBus.handle({
       command_type: 'create-tentative-hold',
       command_id: crypto.randomUUID(),
       payload: {
@@ -216,7 +216,7 @@ router.delete(
 
     const hold = holdResult.rows[0];
 
-    const result = await commandBus.execute({
+    const result = await commandBus.handle({
       command_type: 'release-tentative-hold',
       command_id: crypto.randomUUID(),
       payload: {
@@ -258,7 +258,7 @@ router.post(
       });
     }
 
-    const result = await commandBus.execute({
+    const result = await commandBus.handle({
       command_type: 'block-slot',
       command_id: crypto.randomUUID(),
       payload: {

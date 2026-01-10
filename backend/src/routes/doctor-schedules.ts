@@ -25,7 +25,7 @@ router.post(
       });
     }
 
-    const result = await commandBus.execute({
+    const result = await commandBus.handle({
       command_type: 'create-base-schedule',
       command_id: crypto.randomUUID(),
       payload: req.body,
@@ -132,7 +132,7 @@ router.post(
       });
     }
 
-    const result = await commandBus.execute({
+    const result = await commandBus.handle({
       command_type: 'add-schedule-override',
       command_id: crypto.randomUUID(),
       payload: req.body,
@@ -221,7 +221,7 @@ router.post(
       });
     }
 
-    const result = await commandBus.execute({
+    const result = await commandBus.handle({
       command_type: 'add-forced-block',
       command_id: crypto.randomUUID(),
       payload: req.body,
