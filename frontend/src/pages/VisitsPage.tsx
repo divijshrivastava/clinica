@@ -321,10 +321,6 @@ export default function VisitsPage() {
                             const patient = patients.find(p => p.id === patientId)
                             setSelectedPatient(patient || null)
                           }}
-                          onBlur={() => {
-                            const field = register('patient_id', { required: 'Patient is required' })
-                            field.onBlur()
-                          }}
                           error={errors.patient_id?.message as string}
                           required
                           placeholder="Search by name or MRN..."

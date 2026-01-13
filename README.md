@@ -241,10 +241,13 @@ MyMedic follows a modern event-sourced CQRS architecture:
 4. **Set up the database**
    ```bash
    # Create database
-   createdb clinica_dev
+   createdb mymedic_dev
 
    # Run schema migration
-   psql -d clinica_dev -f ../schema.sql
+   psql mymedic_dev -f schema.sql
+
+   # Create test user (for development)
+   psql mymedic_dev -f backend/scripts/create-test-user.sql
    ```
 
 5. **Configure environment variables**
@@ -281,6 +284,14 @@ MyMedic follows a modern event-sourced CQRS architecture:
 
 6. **Start the development servers**
 
+   **Quick Start (Recommended):**
+   ```bash
+   # Start both backend and frontend at once
+   ./dev.sh
+   ```
+
+   Or manually start each service:
+   
    In one terminal (backend):
    ```bash
    cd backend
@@ -297,11 +308,41 @@ MyMedic follows a modern event-sourced CQRS architecture:
    - Frontend: http://localhost:5173
    - Backend API: http://localhost:3000
 
+### Quick Commands
+
+We provide convenient scripts for managing the development environment:
+
+**Start both services:**
+```bash
+./dev.sh
+```
+
+**Restart both services:**
+```bash
+./restart.sh
+```
+
+**Stop both services:**
+```bash
+./stop.sh
+```
+
+**View logs:**
+```bash
+# Backend logs
+tail -f logs/backend.log
+
+# Frontend logs
+tail -f logs/frontend.log
+```
+
 ### First Login
 
-Use the test credentials:
+After running the test user setup script, you can login with:
 - **Email**: `test.doctor@example.com`
 - **Password**: `password123`
+
+Or click the "🧪 Test Login" button on the login page for quick access.
 
 ---
 

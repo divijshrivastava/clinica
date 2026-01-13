@@ -449,10 +449,6 @@ export default function AppointmentsPage() {
                           patients={patients}
                           value={watch('patient_id') || patientIdFromQuery || ''}
                           onChange={(patientId) => setValue('patient_id', patientId, { shouldValidate: true })}
-                          onBlur={() => {
-                            const field = register('patient_id', { required: 'Patient is required' })
-                            field.onBlur()
-                          }}
                           error={errors.patient_id?.message as string}
                           required
                           placeholder="Search by name or MRN..."

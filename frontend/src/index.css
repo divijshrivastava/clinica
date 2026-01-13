@@ -7,9 +7,9 @@
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  color-scheme: light;
+  color: #111827;
+  background-color: #ffffff;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -48,15 +48,24 @@ input[type="text"],
 input[type="email"],
 input[type="tel"],
 input[type="password"],
+input[type="number"],
+input[type="date"],
+input[type="datetime-local"],
 select {
   color: #111827 !important;
+  background-color: #ffffff !important;
+  -webkit-text-fill-color: #111827 !important;
 }
 
 input[type="text"]::placeholder,
 input[type="email"]::placeholder,
 input[type="tel"]::placeholder,
-input[type="password"]::placeholder {
+input[type="password"]::placeholder,
+input[type="number"]::placeholder,
+input[type="date"]::placeholder,
+input[type="datetime-local"]::placeholder {
   color: #9ca3af !important;
+  -webkit-text-fill-color: #9ca3af !important;
 }
 
 /* Additional input fixes for visibility */
@@ -64,6 +73,7 @@ input,
 textarea,
 select {
   color: #111827 !important;
+  background-color: #ffffff !important;
   -webkit-text-fill-color: #111827 !important;
 }
 

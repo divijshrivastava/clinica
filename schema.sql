@@ -43,7 +43,15 @@ CREATE TYPE aggregate_type AS ENUM (
     'invoice',
     'payment',
     'charge_code',
-    'admission'
+    'admission',
+    'doctor_profile',
+    'doctor_schedule',
+    'appointment_slot',
+    'room',
+    'equipment',
+    'leave_request',
+    'department',
+    'location'
 );
 
 -- Event types (domain events)
@@ -137,11 +145,73 @@ CREATE TYPE event_type AS ENUM (
     'patient_transferred',
     'patient_discharged',
     'room_assigned',
-    'room_charge_added'
+    'room_charge_added',
+
+    -- Doctor Profile events
+    'doctor_profile_created',
+    'doctor_profile_updated',
+    'doctor_specialty_added',
+    'doctor_specialty_removed',
+    'doctor_qualification_added',
+    'doctor_department_assigned',
+    'doctor_location_assigned',
+    'doctor_location_removed',
+    'doctor_fees_updated',
+    'doctor_status_changed',
+    'doctor_onboarding_stage_completed',
+    'doctor_verification_completed',
+    'doctor_activated',
+    'doctor_deactivated',
+
+    -- Doctor Schedule events
+    'base_schedule_created',
+    'base_schedule_updated',
+    'schedule_override_added',
+    'schedule_override_removed',
+    'leave_requested',
+    'leave_approved',
+    'leave_rejected',
+    'leave_cancelled',
+    'emergency_unavailable_added',
+    'forced_block_added',
+    'forced_block_removed',
+    'holiday_schedule_set',
+
+    -- Appointment Slot events
+    'slots_generated',
+    'slot_blocked',
+    'slot_unblocked',
+    'slot_capacity_changed',
+    'tentative_hold_created',
+    'tentative_hold_released',
+    'tentative_hold_expired',
+    'slot_booked',
+
+    -- Room events
+    'room_created',
+    'room_updated',
+    'room_deactivated',
+    'room_auto_assigned',
+    'room_manually_overridden',
+
+    -- Equipment events
+    'equipment_created',
+    'equipment_updated',
+    'equipment_assigned_to_slot',
+    'equipment_maintenance_scheduled',
+
+    -- Department events
+    'department_created',
+    'department_updated',
+
+    -- Location events
+    'location_created',
+    'location_updated',
+    'location_deactivated'
 );
 
 -- Existing enums (keep for projections)
-CREATE TYPE user_role AS ENUM ('doctor', 'nurse', 'admin', 'receptionist', 'lab_technician');
+CREATE TYPE user_role AS ENUM ('doctor', 'nurse', 'admin', 'receptionist', 'lab_technician', 'department_head');
 CREATE TYPE visit_status AS ENUM ('scheduled', 'in_progress', 'completed', 'no_show', 'cancelled');
 CREATE TYPE appointment_status AS ENUM ('scheduled', 'confirmed', 'completed', 'no_show', 'cancelled', 'rescheduled');
 CREATE TYPE note_type AS ENUM ('handwritten', 'typed', 'template', 'voice');
@@ -153,6 +223,18 @@ CREATE TYPE report_category AS ENUM ('clinical', 'appointments', 'communication'
 CREATE TYPE prediction_type AS ENUM ('no_show_risk', 'follow_up_default', 'readmission_risk');
 CREATE TYPE consent_type AS ENUM ('whatsapp', 'analytics', 'research', 'marketing');
 
+-- Doctor scheduling enums
+CREATE TYPE doctor_status AS ENUM ('draft', 'pending_verification', 'active', 'on_leave', 'inactive', 'terminated');
+CREATE TYPE onboarding_stage AS ENUM ('profile_creation', 'credential_verification', 'department_assignment', 'location_assignment', 'fee_configuration', 'availability_setup', 'resource_allocation', 'compliance_checks', 'final_approval', 'activation');
+CREATE TYPE stage_status AS ENUM ('pending', 'in_progress', 'completed', 'blocked', 'skipped');
+CREATE TYPE verification_status AS ENUM ('pending', 'in_progress', 'verified', 'failed', 'expired');
+CREATE TYPE leave_status AS ENUM ('draft', 'submitted', 'pending_approval', 'approved', 'rejected', 'cancelled');
+CREATE TYPE leave_type AS ENUM ('vacation', 'sick', 'emergency', 'conference', 'personal');
+CREATE TYPE schedule_source AS ENUM ('base_schedule', 'override', 'leave', 'holiday', 'emergency', 'forced_block');
+CREATE TYPE slot_status AS ENUM ('available', 'tentative', 'booked', 'blocked', 'completed', 'no_show');
+CREATE TYPE hold_type AS ENUM ('booking_in_progress', 'payment_pending', 'admin_reserved');
+CREATE TYPE consultation_mode AS ENUM ('in_person', 'tele_consultation', 'both');
+
 -- =====================================================
 -- EVENT STORE (SINGLE SOURCE OF TRUTH)
 -- =====================================================
@@ -160,7 +242,7 @@ CREATE TYPE consent_type AS ENUM ('whatsapp', 'analytics', 'research', 'marketin
 -- Immutable event store - ALL writes go here first
 CREATE TABLE event_store (
     -- Event identity
-    event_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    event_id UUID DEFAULT uuid_generate_v4(),
     event_number BIGSERIAL NOT NULL, -- Global ordering for replay
     
     -- Aggregate identity (which entity this event belongs to)
@@ -195,8 +277,8 @@ CREATE TABLE event_store (
     idempotency_key TEXT, -- Client-provided key for exactly-once semantics
     
     -- Constraints
-    UNIQUE(aggregate_id, aggregate_version), -- Optimistic concurrency
-    UNIQUE(idempotency_key) WHERE idempotency_key IS NOT NULL,
+    PRIMARY KEY (event_id, event_timestamp), -- Must include partition key
+    UNIQUE(aggregate_id, aggregate_version, event_timestamp), -- Optimistic concurrency with partition key
 
     -- Validate event_type matches aggregate_type
     CONSTRAINT valid_event_aggregate_mapping CHECK (
@@ -216,7 +298,20 @@ CREATE TABLE event_store (
         (event_type::text LIKE '%admitted' AND aggregate_type = 'admission') OR
         (event_type::text LIKE '%transferred' AND aggregate_type = 'admission') OR
         (event_type::text LIKE '%discharged' AND aggregate_type = 'admission') OR
-        (event_type::text LIKE 'room_%' AND aggregate_type = 'admission')
+        (event_type::text LIKE 'doctor_profile_%' AND aggregate_type = 'doctor_profile') OR
+        (event_type::text LIKE 'doctor_%' AND aggregate_type = 'doctor_profile') OR
+        (event_type::text LIKE 'base_schedule_%' AND aggregate_type = 'doctor_schedule') OR
+        (event_type::text LIKE 'schedule_%' AND aggregate_type = 'doctor_schedule') OR
+        (event_type::text LIKE 'leave_%' AND aggregate_type = 'leave_request') OR
+        (event_type::text LIKE 'emergency_%' AND aggregate_type = 'doctor_schedule') OR
+        (event_type::text LIKE 'forced_%' AND aggregate_type = 'doctor_schedule') OR
+        (event_type::text LIKE 'holiday_%' AND aggregate_type = 'doctor_schedule') OR
+        (event_type::text LIKE 'slot%' AND aggregate_type = 'appointment_slot') OR
+        (event_type::text LIKE 'tentative_%' AND aggregate_type = 'appointment_slot') OR
+        (event_type::text LIKE 'room_%' AND (aggregate_type = 'room' OR aggregate_type = 'admission')) OR
+        (event_type::text LIKE 'equipment_%' AND aggregate_type = 'equipment') OR
+        (event_type::text LIKE 'department_%' AND aggregate_type = 'department') OR
+        (event_type::text LIKE 'location_%' AND aggregate_type = 'location')
     )
 
 ) PARTITION BY RANGE (event_timestamp);
@@ -227,8 +322,10 @@ CREATE INDEX idx_event_store_type ON event_store(event_type, event_timestamp);
 CREATE INDEX idx_event_store_hospital ON event_store(hospital_id, event_timestamp);
 CREATE INDEX idx_event_store_number ON event_store(event_number); -- For sequential replay
 CREATE INDEX idx_event_store_correlation ON event_store(correlation_id) WHERE correlation_id IS NOT NULL;
-CREATE INDEX idx_event_store_idempotency ON event_store(idempotency_key) WHERE idempotency_key IS NOT NULL;
 CREATE INDEX idx_event_store_schema_version ON event_store(event_type, event_schema_version);
+
+-- Partial unique index for idempotency (must include partition key)
+CREATE UNIQUE INDEX idx_event_store_idempotency_unique ON event_store(idempotency_key, event_timestamp) WHERE idempotency_key IS NOT NULL;
 
 -- JSONB indexes for common event_data queries
 CREATE INDEX idx_event_store_data_mrn ON event_store USING gin ((event_data->'mrn')) WHERE event_type = 'patient_registered';
@@ -420,7 +517,15 @@ INSERT INTO projection_state (projection_name) VALUES
     ('invoices_projection'),
     ('payments_projection'),
     ('charge_codes_projection'),
-    ('admissions_projection');
+    ('admissions_projection'),
+    ('doctor_profiles_projection'),
+    ('doctor_schedules_projection'),
+    ('appointment_slots_projection'),
+    ('rooms_projection'),
+    ('equipment_projection'),
+    ('leave_requests_projection'),
+    ('departments_projection'),
+    ('locations_projection');
 
 -- =====================================================
 -- AGGREGATE SNAPSHOTS (Performance Optimization)
@@ -850,7 +955,7 @@ CREATE TABLE appointments (
     updated_by UUID REFERENCES users(id),
     last_event_id UUID,
     deleted_at TIMESTAMPTZ,
-    deleted_by UUID REFERENCES users(id),
+    deleted_by UUID REFERENCES users(id)
     
     -- Prevent double-booking (using a computed column approach)
     -- Note: EXCLUDE constraint with computed intervals requires immutable functions
@@ -1614,6 +1719,548 @@ CREATE TABLE adt_dead_letter_queue (
 );
 
 CREATE INDEX idx_adt_dlq_unresolved ON adt_dead_letter_queue(hospital_id) WHERE resolved_at IS NULL;
+
+-- =====================================================
+-- DOCTOR SCHEDULING SYSTEM (Read Models)
+-- =====================================================
+
+-- Departments (read model)
+CREATE TABLE departments (
+    id UUID PRIMARY KEY,
+    current_version INT NOT NULL DEFAULT 0,
+    hospital_id UUID NOT NULL REFERENCES hospitals(id),
+
+    code VARCHAR(50) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    head_doctor_id UUID REFERENCES users(id),
+    is_active BOOLEAN DEFAULT TRUE,
+
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    last_event_id UUID,
+    deleted_at TIMESTAMPTZ,
+
+    UNIQUE(hospital_id, code)
+);
+
+CREATE INDEX idx_departments_hospital ON departments(hospital_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_departments_active ON departments(hospital_id, is_active) WHERE is_active = TRUE AND deleted_at IS NULL;
+
+-- Locations (read model)
+CREATE TABLE locations (
+    id UUID PRIMARY KEY,
+    current_version INT NOT NULL DEFAULT 0,
+    hospital_id UUID NOT NULL REFERENCES hospitals(id),
+
+    code VARCHAR(50) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    address JSONB,
+    phone TEXT,
+    is_primary BOOLEAN DEFAULT FALSE,
+    is_active BOOLEAN DEFAULT TRUE,
+    timezone VARCHAR(50) DEFAULT 'Asia/Kolkata',
+
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    last_event_id UUID,
+    deleted_at TIMESTAMPTZ,
+
+    UNIQUE(hospital_id, code)
+);
+
+CREATE INDEX idx_locations_hospital ON locations(hospital_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_locations_active ON locations(hospital_id, is_active) WHERE is_active = TRUE AND deleted_at IS NULL;
+
+-- Doctor Profiles (read model)
+CREATE TABLE doctor_profiles (
+    id UUID PRIMARY KEY,
+    current_version INT NOT NULL DEFAULT 0,
+    hospital_id UUID NOT NULL REFERENCES hospitals(id),
+    user_id UUID NOT NULL REFERENCES users(id),
+
+    -- Basic Info
+    display_name VARCHAR(255),
+    salutation VARCHAR(20),
+    bio TEXT,
+    profile_image_url TEXT,
+    years_of_experience INT,
+
+    -- Registration & Licensing
+    registration_number VARCHAR(100) UNIQUE,
+    license_number VARCHAR(100),
+    license_expiry_date DATE,
+    license_verified BOOLEAN DEFAULT FALSE,
+    license_verified_at TIMESTAMPTZ,
+    license_verified_by UUID REFERENCES users(id),
+
+    -- Specialties (primary specialty in JSON array)
+    specialties JSONB DEFAULT '[]',
+
+    -- Qualifications
+    qualifications JSONB DEFAULT '[]',
+
+    -- Languages
+    languages TEXT[] DEFAULT '{"English"}',
+
+    -- Consultation Modes
+    consultation_modes consultation_mode[] DEFAULT '{in_person}',
+
+    -- Status
+    status doctor_status DEFAULT 'draft',
+    is_bookable BOOLEAN DEFAULT FALSE,
+    accepts_online_bookings BOOLEAN DEFAULT FALSE,
+    public_profile_visible BOOLEAN DEFAULT FALSE,
+    bookability_score DECIMAL(5,2) DEFAULT 0.0,
+
+    -- Fees (base consultation fee)
+    consultation_fee DECIMAL(10,2),
+    follow_up_fee DECIMAL(10,2),
+    tele_consultation_fee DECIMAL(10,2),
+    currency VARCHAR(3) DEFAULT 'INR',
+
+    -- Metadata
+    tags TEXT[],
+
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    last_event_id UUID,
+    deleted_at TIMESTAMPTZ,
+
+    UNIQUE(hospital_id, user_id)
+);
+
+CREATE INDEX idx_doctor_profiles_hospital ON doctor_profiles(hospital_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_doctor_profiles_user ON doctor_profiles(user_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_doctor_profiles_status ON doctor_profiles(status) WHERE deleted_at IS NULL;
+CREATE INDEX idx_doctor_profiles_bookable ON doctor_profiles(hospital_id, is_bookable) WHERE is_bookable = TRUE AND deleted_at IS NULL;
+CREATE INDEX idx_doctor_profiles_specialties ON doctor_profiles USING gin(specialties);
+
+-- Doctor Department Assignments (many-to-many)
+CREATE TABLE doctor_department_assignments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    doctor_profile_id UUID NOT NULL REFERENCES doctor_profiles(id) ON DELETE CASCADE,
+    department_id UUID NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+
+    allocation_percentage DECIMAL(5,2) DEFAULT 100.0,
+    is_primary BOOLEAN DEFAULT FALSE,
+    assigned_at TIMESTAMPTZ DEFAULT NOW(),
+    assigned_by UUID REFERENCES users(id),
+
+    UNIQUE(doctor_profile_id, department_id),
+    CHECK (allocation_percentage >= 0 AND allocation_percentage <= 100)
+);
+
+CREATE INDEX idx_doctor_dept_assignments_doctor ON doctor_department_assignments(doctor_profile_id);
+CREATE INDEX idx_doctor_dept_assignments_department ON doctor_department_assignments(department_id);
+
+-- Doctor Location Assignments (many-to-many)
+CREATE TABLE doctor_location_assignments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    doctor_profile_id UUID NOT NULL REFERENCES doctor_profiles(id) ON DELETE CASCADE,
+    location_id UUID NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+
+    is_primary BOOLEAN DEFAULT FALSE,
+    assigned_at TIMESTAMPTZ DEFAULT NOW(),
+    assigned_by UUID REFERENCES users(id),
+    removed_at TIMESTAMPTZ,
+
+    UNIQUE(doctor_profile_id, location_id, removed_at)
+);
+
+CREATE INDEX idx_doctor_loc_assignments_doctor ON doctor_location_assignments(doctor_profile_id) WHERE removed_at IS NULL;
+CREATE INDEX idx_doctor_loc_assignments_location ON doctor_location_assignments(location_id) WHERE removed_at IS NULL;
+
+-- Doctor Onboarding State (read model)
+CREATE TABLE doctor_onboarding_states (
+    id UUID PRIMARY KEY,
+    current_version INT NOT NULL DEFAULT 0,
+    doctor_profile_id UUID NOT NULL REFERENCES doctor_profiles(id) ON DELETE CASCADE,
+
+    current_stage onboarding_stage DEFAULT 'profile_creation',
+    overall_status VARCHAR(50) DEFAULT 'draft',
+
+    -- Stage completion tracking
+    stages JSONB NOT NULL DEFAULT '[]',
+
+    -- Verification tracking
+    verification_checks JSONB DEFAULT '[]',
+    all_verifications_passed BOOLEAN DEFAULT FALSE,
+
+    -- Activation blockers
+    blockers JSONB DEFAULT '[]',
+    can_accept_appointments BOOLEAN DEFAULT FALSE,
+
+    -- Ownership
+    created_by UUID REFERENCES users(id),
+    current_owner UUID REFERENCES users(id),
+    approval_chain JSONB DEFAULT '[]',
+
+    -- Timestamps
+    started_at TIMESTAMPTZ DEFAULT NOW(),
+    target_completion_date DATE,
+    completed_at TIMESTAMPTZ,
+    activated_at TIMESTAMPTZ,
+
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    last_event_id UUID,
+
+    UNIQUE(doctor_profile_id)
+);
+
+CREATE INDEX idx_onboarding_states_doctor ON doctor_onboarding_states(doctor_profile_id);
+CREATE INDEX idx_onboarding_states_status ON doctor_onboarding_states(overall_status);
+CREATE INDEX idx_onboarding_states_owner ON doctor_onboarding_states(current_owner) WHERE overall_status NOT IN ('completed', 'active');
+
+-- Doctor Schedules (read model) - Base recurring schedule
+CREATE TABLE doctor_schedules (
+    id UUID PRIMARY KEY,
+    current_version INT NOT NULL DEFAULT 0,
+    doctor_profile_id UUID NOT NULL REFERENCES doctor_profiles(id) ON DELETE CASCADE,
+    location_id UUID REFERENCES locations(id),
+
+    -- Day of week (0 = Sunday, 6 = Saturday)
+    day_of_week INT NOT NULL CHECK (day_of_week >= 0 AND day_of_week <= 6),
+
+    -- Time slots
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL CHECK (end_time > start_time),
+
+    -- Slot configuration
+    slot_duration_minutes INT NOT NULL DEFAULT 30,
+    buffer_time_minutes INT DEFAULT 0,
+    max_appointments_per_slot INT DEFAULT 1,
+
+    -- Consultation mode
+    consultation_mode consultation_mode DEFAULT 'in_person',
+
+    -- Capacity limits
+    max_in_person_capacity INT,
+    max_tele_capacity INT,
+
+    -- Status
+    is_active BOOLEAN DEFAULT TRUE,
+    effective_from DATE DEFAULT CURRENT_DATE,
+    effective_until DATE,
+
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    last_event_id UUID,
+    deleted_at TIMESTAMPTZ,
+
+    UNIQUE(doctor_profile_id, location_id, day_of_week, start_time, deleted_at)
+);
+
+CREATE INDEX idx_doctor_schedules_doctor ON doctor_schedules(doctor_profile_id) WHERE deleted_at IS NULL AND is_active = TRUE;
+CREATE INDEX idx_doctor_schedules_location ON doctor_schedules(location_id) WHERE deleted_at IS NULL AND is_active = TRUE;
+CREATE INDEX idx_doctor_schedules_day ON doctor_schedules(day_of_week) WHERE deleted_at IS NULL AND is_active = TRUE;
+
+-- Schedule Overrides (read model) - Specific date overrides
+CREATE TABLE schedule_overrides (
+    id UUID PRIMARY KEY,
+    current_version INT NOT NULL DEFAULT 0,
+    doctor_profile_id UUID NOT NULL REFERENCES doctor_profiles(id) ON DELETE CASCADE,
+    location_id UUID REFERENCES locations(id),
+
+    override_date DATE NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL CHECK (end_time > start_time),
+
+    slot_duration_minutes INT NOT NULL DEFAULT 30,
+    buffer_time_minutes INT DEFAULT 0,
+    max_appointments_per_slot INT DEFAULT 1,
+
+    consultation_mode consultation_mode DEFAULT 'in_person',
+
+    reason TEXT,
+    created_by UUID REFERENCES users(id),
+
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    last_event_id UUID,
+    deleted_at TIMESTAMPTZ,
+
+    UNIQUE(doctor_profile_id, location_id, override_date, start_time, deleted_at)
+);
+
+CREATE INDEX idx_schedule_overrides_doctor ON schedule_overrides(doctor_profile_id, override_date) WHERE deleted_at IS NULL;
+CREATE INDEX idx_schedule_overrides_date ON schedule_overrides(override_date) WHERE deleted_at IS NULL;
+
+-- Leave Requests (read model)
+CREATE TABLE leave_requests (
+    id UUID PRIMARY KEY,
+    current_version INT NOT NULL DEFAULT 0,
+    doctor_profile_id UUID NOT NULL REFERENCES doctor_profiles(id) ON DELETE CASCADE,
+
+    leave_type leave_type NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL CHECK (end_date >= start_date),
+
+    -- Partial day support
+    is_full_day BOOLEAN DEFAULT TRUE,
+    start_time TIME,
+    end_time TIME,
+
+    reason TEXT,
+    status leave_status DEFAULT 'draft',
+
+    -- Approval workflow
+    submitted_at TIMESTAMPTZ,
+    submitted_by UUID REFERENCES users(id),
+    approved_at TIMESTAMPTZ,
+    approved_by UUID REFERENCES users(id),
+    rejected_at TIMESTAMPTZ,
+    rejected_by UUID REFERENCES users(id),
+    rejection_reason TEXT,
+    cancelled_at TIMESTAMPTZ,
+    cancellation_reason TEXT,
+
+    -- Impact assessment
+    affected_appointments_count INT DEFAULT 0,
+
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    last_event_id UUID,
+    deleted_at TIMESTAMPTZ
+);
+
+CREATE INDEX idx_leave_requests_doctor ON leave_requests(doctor_profile_id, start_date DESC) WHERE deleted_at IS NULL;
+CREATE INDEX idx_leave_requests_status ON leave_requests(status) WHERE deleted_at IS NULL;
+CREATE INDEX idx_leave_requests_pending_approval ON leave_requests(doctor_profile_id, status) WHERE status = 'pending_approval' AND deleted_at IS NULL;
+CREATE INDEX idx_leave_requests_date_range ON leave_requests(start_date, end_date) WHERE deleted_at IS NULL;
+
+-- Schedule Exceptions (read model) - Emergency unavailable, forced blocks, holidays
+CREATE TABLE schedule_exceptions (
+    id UUID PRIMARY KEY,
+    current_version INT NOT NULL DEFAULT 0,
+    doctor_profile_id UUID REFERENCES doctor_profiles(id) ON DELETE CASCADE,
+    hospital_id UUID REFERENCES hospitals(id), -- For hospital-wide holidays
+
+    exception_type schedule_source NOT NULL,
+    exception_date DATE NOT NULL,
+
+    -- Time range (NULL = full day)
+    start_time TIME,
+    end_time TIME,
+
+    reason TEXT NOT NULL,
+    is_hospital_wide BOOLEAN DEFAULT FALSE,
+
+    -- Permissions (who can create/remove)
+    created_by UUID REFERENCES users(id),
+    can_be_overridden BOOLEAN DEFAULT FALSE,
+
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    last_event_id UUID,
+    deleted_at TIMESTAMPTZ
+);
+
+CREATE INDEX idx_schedule_exceptions_doctor ON schedule_exceptions(doctor_profile_id, exception_date) WHERE deleted_at IS NULL;
+CREATE INDEX idx_schedule_exceptions_hospital ON schedule_exceptions(hospital_id, exception_date) WHERE is_hospital_wide = TRUE AND deleted_at IS NULL;
+CREATE INDEX idx_schedule_exceptions_date ON schedule_exceptions(exception_date) WHERE deleted_at IS NULL;
+
+-- Rooms (read model)
+CREATE TABLE rooms (
+    id UUID PRIMARY KEY,
+    current_version INT NOT NULL DEFAULT 0,
+    hospital_id UUID NOT NULL REFERENCES hospitals(id),
+    location_id UUID NOT NULL REFERENCES locations(id),
+
+    room_number VARCHAR(50) NOT NULL,
+    room_name VARCHAR(255),
+    room_type VARCHAR(100), -- 'consultation', 'procedure', 'examination', 'waiting'
+    floor VARCHAR(20),
+
+    capacity INT DEFAULT 1,
+    equipment_available JSONB DEFAULT '[]',
+
+    is_active BOOLEAN DEFAULT TRUE,
+
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    last_event_id UUID,
+    deleted_at TIMESTAMPTZ,
+
+    UNIQUE(hospital_id, location_id, room_number, deleted_at)
+);
+
+CREATE INDEX idx_rooms_hospital ON rooms(hospital_id) WHERE deleted_at IS NULL AND is_active = TRUE;
+CREATE INDEX idx_rooms_location ON rooms(location_id) WHERE deleted_at IS NULL AND is_active = TRUE;
+CREATE INDEX idx_rooms_type ON rooms(room_type) WHERE deleted_at IS NULL AND is_active = TRUE;
+
+-- Equipment (read model)
+CREATE TABLE equipment (
+    id UUID PRIMARY KEY,
+    current_version INT NOT NULL DEFAULT 0,
+    hospital_id UUID NOT NULL REFERENCES hospitals(id),
+    location_id UUID REFERENCES locations(id),
+
+    equipment_code VARCHAR(50) NOT NULL,
+    equipment_name VARCHAR(255) NOT NULL,
+    equipment_type VARCHAR(100),
+
+    is_available BOOLEAN DEFAULT TRUE,
+    maintenance_schedule JSONB,
+    last_maintenance_date DATE,
+    next_maintenance_date DATE,
+
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    last_event_id UUID,
+    deleted_at TIMESTAMPTZ,
+
+    UNIQUE(hospital_id, equipment_code, deleted_at)
+);
+
+CREATE INDEX idx_equipment_hospital ON equipment(hospital_id) WHERE deleted_at IS NULL AND is_available = TRUE;
+CREATE INDEX idx_equipment_location ON equipment(location_id) WHERE deleted_at IS NULL AND is_available = TRUE;
+CREATE INDEX idx_equipment_type ON equipment(equipment_type) WHERE deleted_at IS NULL;
+
+-- Appointment Slots (read model) - Pre-generated slots
+CREATE TABLE appointment_slots (
+    id UUID PRIMARY KEY,
+    current_version INT NOT NULL DEFAULT 0,
+    hospital_id UUID NOT NULL REFERENCES hospitals(id),
+    doctor_profile_id UUID NOT NULL REFERENCES doctor_profiles(id) ON DELETE CASCADE,
+    location_id UUID NOT NULL REFERENCES locations(id),
+
+    slot_date DATE NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    slot_datetime TIMESTAMPTZ NOT NULL, -- Computed: slot_date + start_time in location timezone
+
+    duration_minutes INT NOT NULL DEFAULT 30,
+
+    -- Consultation mode
+    consultation_mode consultation_mode NOT NULL,
+
+    -- Capacity
+    max_in_person_capacity INT DEFAULT 1,
+    max_tele_capacity INT DEFAULT 0,
+    current_in_person_bookings INT DEFAULT 0,
+    current_tele_bookings INT DEFAULT 0,
+
+    -- Status
+    status slot_status DEFAULT 'available',
+
+    -- Blocked slots
+    is_blocked BOOLEAN DEFAULT FALSE,
+    block_reason TEXT,
+    blocked_by UUID REFERENCES users(id),
+    blocked_at TIMESTAMPTZ,
+
+    -- Room assignment
+    room_id UUID REFERENCES rooms(id),
+    room_assigned_at TIMESTAMPTZ,
+    room_assignment_type VARCHAR(50), -- 'auto', 'manual'
+
+    -- Equipment
+    required_equipment_ids UUID[],
+
+    -- Source schedule (for debugging)
+    source_schedule_id UUID,
+    source_type schedule_source,
+
+    -- Generation metadata
+    generated_at TIMESTAMPTZ DEFAULT NOW(),
+    last_booking_at TIMESTAMPTZ,
+
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    last_event_id UUID,
+
+    UNIQUE(doctor_profile_id, location_id, slot_date, start_time)
+);
+
+CREATE INDEX idx_appointment_slots_doctor_date ON appointment_slots(doctor_profile_id, slot_date, start_time);
+CREATE INDEX idx_appointment_slots_location_date ON appointment_slots(location_id, slot_date);
+CREATE INDEX idx_appointment_slots_available ON appointment_slots(doctor_profile_id, slot_date) WHERE status = 'available' AND is_blocked = FALSE;
+CREATE INDEX idx_appointment_slots_datetime ON appointment_slots(slot_datetime);
+CREATE INDEX idx_appointment_slots_room ON appointment_slots(room_id, slot_date) WHERE room_id IS NOT NULL;
+
+-- Tentative Holds (read model) - Temporary reservation of slots
+CREATE TABLE tentative_holds (
+    id UUID PRIMARY KEY,
+    current_version INT NOT NULL DEFAULT 0,
+    slot_id UUID NOT NULL REFERENCES appointment_slots(id) ON DELETE CASCADE,
+
+    held_for_patient_id UUID REFERENCES patients(id),
+    held_for_session_id VARCHAR(255), -- Browser session ID for anonymous users
+
+    hold_type hold_type NOT NULL,
+    consultation_mode consultation_mode NOT NULL,
+
+    held_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL,
+    auto_release_seconds INT NOT NULL,
+
+    status VARCHAR(50) DEFAULT 'active', -- 'active', 'expired', 'confirmed', 'cancelled'
+
+    -- Confirmation
+    confirmed_appointment_id UUID REFERENCES appointments(id),
+    confirmed_at TIMESTAMPTZ,
+
+    -- Expiry
+    expired_at TIMESTAMPTZ,
+    released_at TIMESTAMPTZ,
+    release_reason TEXT,
+
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    last_event_id UUID
+);
+
+CREATE INDEX idx_tentative_holds_slot ON tentative_holds(slot_id) WHERE status = 'active';
+CREATE INDEX idx_tentative_holds_patient ON tentative_holds(held_for_patient_id) WHERE status = 'active';
+CREATE INDEX idx_tentative_holds_session ON tentative_holds(held_for_session_id) WHERE status = 'active';
+CREATE INDEX idx_tentative_holds_expiry ON tentative_holds(expires_at) WHERE status = 'active';
+
+-- Room Assignments for Appointments (history)
+CREATE TABLE appointment_room_assignments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    appointment_id UUID NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
+    slot_id UUID REFERENCES appointment_slots(id),
+    room_id UUID NOT NULL REFERENCES rooms(id),
+
+    assignment_type VARCHAR(50) NOT NULL, -- 'auto', 'manual_override', 'policy_based'
+    assigned_at TIMESTAMPTZ DEFAULT NOW(),
+    assigned_by UUID REFERENCES users(id),
+
+    -- Override tracking
+    previous_room_id UUID REFERENCES rooms(id),
+    override_reason TEXT,
+
+    is_current BOOLEAN DEFAULT TRUE
+);
+
+CREATE INDEX idx_appt_room_assignments_appointment ON appointment_room_assignments(appointment_id);
+CREATE INDEX idx_appt_room_assignments_room ON appointment_room_assignments(room_id, assigned_at);
+CREATE INDEX idx_appt_room_assignments_current ON appointment_room_assignments(appointment_id, is_current) WHERE is_current = TRUE;
+
+-- Doctor Availability Cache (materialized view for performance)
+CREATE MATERIALIZED VIEW doctor_availability_cache AS
+SELECT
+    dp.id as doctor_profile_id,
+    dp.hospital_id,
+    s.slot_date,
+    s.location_id,
+    COUNT(*) FILTER (WHERE s.status = 'available' AND s.is_blocked = FALSE) as available_slots,
+    COUNT(*) FILTER (WHERE s.status = 'booked') as booked_slots,
+    COUNT(*) FILTER (WHERE s.status = 'blocked') as blocked_slots,
+    MIN(s.start_time) as first_available_time,
+    MAX(s.end_time) as last_available_time,
+    ARRAY_AGG(DISTINCT s.consultation_mode) as available_modes
+FROM doctor_profiles dp
+JOIN appointment_slots s ON s.doctor_profile_id = dp.id
+WHERE dp.deleted_at IS NULL
+  AND dp.is_bookable = TRUE
+  AND s.slot_date >= CURRENT_DATE
+GROUP BY dp.id, dp.hospital_id, s.slot_date, s.location_id;
+
+CREATE UNIQUE INDEX idx_doctor_availability_cache ON doctor_availability_cache(doctor_profile_id, slot_date, location_id);
+CREATE INDEX idx_doctor_availability_cache_date ON doctor_availability_cache(slot_date, hospital_id);
+
+COMMENT ON MATERIALIZED VIEW doctor_availability_cache IS 'Cached doctor availability for fast slot searches. Refresh hourly or after slot changes.';
 
 -- =====================================================
 -- SYSTEM TABLES (same as before)

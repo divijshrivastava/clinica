@@ -13,6 +13,39 @@ Both backend and frontend are **running successfully**:
 
 ---
 
+## 🔧 Setup Instructions
+
+### 1. Create Database Tables
+
+**IMPORTANT:** Run these migrations first if you haven't already:
+
+```bash
+cd /Users/divij/code/ai/medico-manager
+
+# Create prerequisite tables (departments, locations)
+psql -h localhost -U divij -d mymedic_dev -f migrations/prerequisite-tables.sql
+
+# Create doctor scheduling tables
+psql -h localhost -U divij -d mymedic_dev -f migrations/doctor-scheduling-tables.sql
+
+# Add sample data (optional but recommended for testing)
+psql -h localhost -U divij -d mymedic_dev -f migrations/sample-data.sql
+```
+
+### 2. Verify Backend is Running
+
+```bash
+curl http://localhost:3000/health
+# Should return: {"status":"ok","timestamp":"...","service":"mymedic-backend"}
+```
+
+If not running, start the services:
+```bash
+./dev.sh
+```
+
+---
+
 ## 🔐 Authentication Required
 
 The doctor scheduling system requires authentication. You need to:
@@ -22,12 +55,38 @@ The doctor scheduling system requires authentication. You need to:
 2. Enter your credentials
 3. After login, navigate to the "Doctors" menu item
 
-### Option 2: Create Test Data
-If you don't have a user account, you need to:
-1. Create a hospital
-2. Create a user account
-3. Log in
-4. Then access the doctor scheduling features
+### Option 2: Use Test Token (Development Only)
+
+```bash
+# Generate a test token
+curl -X POST http://localhost:3000/auth/generate-test-token \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "d9896cf6-1711-46bf-a3a8-9abaa51a4364",
+    "hospital_id": "9c034596-3f7e-4538-87ee-b9ac271aa34c",
+    "role": "admin",
+    "email": "divij.shrivastava@gmail.com"
+  }'
+```
+
+Then in browser console:
+```javascript
+localStorage.setItem('mymedic-auth', JSON.stringify({
+  state: {
+    token: "YOUR_TOKEN_HERE",
+    user: {
+      user_id: "d9896cf6-1711-46bf-a3a8-9abaa51a4364",
+      hospital_id: "9c034596-3f7e-4538-87ee-b9ac271aa34c",
+      role: "admin",
+      email: "divij.shrivastava@gmail.com"
+    },
+    isAuthenticated: true,
+    _hasHydrated: true
+  },
+  version: 0
+}));
+location.reload();
+```
 
 ---
 

@@ -123,37 +123,17 @@ export default function LoginPage() {
               setLoading(true)
 
               try {
-                // Generate a valid JWT token from the backend
-                const response = await fetch('http://localhost:3000/auth/generate-test-token', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    user_id: 'test-user',
-                    hospital_id: 'test-hospital',
-                    role: 'doctor',
-                    email: 'test@test.com',
-                  }),
+                // Use actual login with test credentials
+                const loginResponse = await login({
+                  email: 'test.doctor@example.com',
+                  password: 'password123',
                 })
 
-                if (!response.ok) {
-                  throw new Error('Failed to generate test token')
-                }
+                console.log('✅ Test login successful', loginResponse)
 
-                const data = await response.json()
-                const token = data.token
-
-                console.log('✅ Generated valid JWT token')
-
-                // Update Zustand store with the valid token
+                // Update Zustand store
                 const store = useAuthStore.getState()
-                store.login(token, {
-                  user_id: 'test-user',
-                  hospital_id: 'test-hospital',
-                  role: 'doctor',
-                  email: 'test@test.com',
-                })
+                store.login(loginResponse.token, loginResponse.user)
                 store.setHasHydrated(true)
 
                 toast.success('Test login successful!')
@@ -165,7 +145,7 @@ export default function LoginPage() {
                 window.location.href = '/'
               } catch (error) {
                 console.error('Test login error:', error)
-                toast.error('Test login failed')
+                toast.error('Test login failed. Make sure test user exists.')
                 setLoading(false)
               }
             }}

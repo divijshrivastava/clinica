@@ -13,7 +13,15 @@ export type AggregateType =
   | "prescription"
   | "whatsapp_message"
   | "user"
-  | "hospital";
+  | "hospital"
+  | "doctor_profile"
+  | "doctor_schedule"
+  | "appointment_slot"
+  | "room"
+  | "equipment"
+  | "leave_request"
+  | "department"
+  | "location";
 
 // Event Types (from schema.sql ENUM)
 export type EventType =
@@ -70,7 +78,62 @@ export type EventType =
   | "user_role_changed"
   | "user_deactivated"
   | "hospital_created"
-  | "hospital_settings_updated";
+  | "hospital_settings_updated"
+  // Doctor Profile Events
+  | "doctor_profile_created"
+  | "doctor_profile_updated"
+  | "doctor_specialty_added"
+  | "doctor_specialty_removed"
+  | "doctor_qualification_added"
+  | "doctor_department_assigned"
+  | "doctor_location_assigned"
+  | "doctor_location_removed"
+  | "doctor_fees_updated"
+  | "doctor_status_changed"
+  | "doctor_onboarding_stage_completed"
+  | "doctor_verification_completed"
+  | "doctor_activated"
+  | "doctor_deactivated"
+  // Doctor Schedule Events
+  | "base_schedule_created"
+  | "base_schedule_updated"
+  | "schedule_override_added"
+  | "schedule_override_removed"
+  | "leave_requested"
+  | "leave_approved"
+  | "leave_rejected"
+  | "leave_cancelled"
+  | "emergency_unavailable_added"
+  | "forced_block_added"
+  | "forced_block_removed"
+  | "holiday_schedule_set"
+  // Appointment Slot Events
+  | "slots_generated"
+  | "slot_blocked"
+  | "slot_unblocked"
+  | "slot_capacity_changed"
+  | "tentative_hold_created"
+  | "tentative_hold_released"
+  | "tentative_hold_expired"
+  | "slot_booked"
+  // Room Events
+  | "room_created"
+  | "room_updated"
+  | "room_deactivated"
+  | "room_auto_assigned"
+  | "room_manually_overridden"
+  // Equipment Events
+  | "equipment_created"
+  | "equipment_updated"
+  | "equipment_assigned_to_slot"
+  | "equipment_maintenance_scheduled"
+  // Department Events
+  | "department_created"
+  | "department_updated"
+  // Location Events
+  | "location_created"
+  | "location_updated"
+  | "location_deactivated";
 
 /**
  * Base Event structure stored in event_store table
