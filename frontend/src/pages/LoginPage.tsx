@@ -110,51 +110,6 @@ export default function LoginPage() {
             {loading ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
-
-        <div className="mt-6 space-y-3">
-          <div className="text-center text-sm text-gray-600">
-            <p>Demo Mode: Use any email/password to login</p>
-          </div>
-          {/* Test button to bypass form */}
-          <button
-            type="button"
-            onClick={async () => {
-              console.log('🧪 Test login button clicked')
-              setLoading(true)
-
-              try {
-                // Use actual login with test credentials
-                const loginResponse = await login({
-                  email: 'test.doctor@example.com',
-                  password: 'password123',
-                })
-
-                console.log('✅ Test login successful', loginResponse)
-
-                // Update Zustand store
-                const store = useAuthStore.getState()
-                store.login(loginResponse.token, loginResponse.user)
-                store.setHasHydrated(true)
-
-                toast.success('Test login successful!')
-
-                // Wait a moment
-                await new Promise(resolve => setTimeout(resolve, 300))
-
-                console.log('🚀 Navigating to dashboard...')
-                window.location.href = '/'
-              } catch (error) {
-                console.error('Test login error:', error)
-                toast.error('Test login failed. Make sure test user exists.')
-                setLoading(false)
-              }
-            }}
-            disabled={loading}
-            className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            🧪 Test Login (Bypass Form)
-          </button>
-        </div>
       </div>
     </div>
   )
