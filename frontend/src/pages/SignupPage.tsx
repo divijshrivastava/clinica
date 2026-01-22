@@ -127,23 +127,20 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4 py-12">
       <div className="max-w-5xl w-full">
         {/* Header */}
         <div className="text-center mb-12">
-          <div className="flex items-center justify-center mb-4">
-            <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center mr-3">
-              <FiActivity className="w-7 h-7 text-white" />
-            </div>
-            <h1 className="text-3xl font-bold text-gray-900">MyMedic</h1>
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-600 to-primary-600 rounded-2xl shadow-lg mb-4">
+            <FiActivity className="w-9 h-9 text-white" />
           </div>
-          <h2 className="text-4xl font-bold text-gray-900 mb-3">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-primary-600 bg-clip-text text-transparent mb-3">
             Welcome to MyMedic
-          </h2>
-          <p className="text-xl text-gray-600">
+          </h1>
+          <p className="text-xl text-gray-700 font-medium">
             Modern Patient Management Platform
           </p>
-          <p className="text-sm text-gray-500 mt-2">
+          <p className="text-base text-gray-600 mt-3">
             Choose your provider type to get started
           </p>
         </div>
@@ -209,19 +206,25 @@ export default function SignupPage() {
 
         {/* Trust Indicators */}
         <div className="mt-16 text-center">
-          <p className="text-xs text-gray-500 mb-4">Trusted by healthcare professionals</p>
-          <div className="flex items-center justify-center space-x-8 text-gray-400">
+          <p className="text-sm text-gray-600 mb-6 font-medium">Trusted by healthcare professionals worldwide</p>
+          <div className="flex items-center justify-center space-x-12 text-gray-600">
             <div className="flex items-center space-x-2">
-              <FiCheck className="w-4 h-4" />
-              <span className="text-sm">HIPAA Compliant</span>
+              <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                <FiCheck className="w-5 h-5 text-green-600" />
+              </div>
+              <span className="text-sm font-medium">HIPAA Compliant</span>
             </div>
             <div className="flex items-center space-x-2">
-              <FiCheck className="w-4 h-4" />
-              <span className="text-sm">Secure & Private</span>
+              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                <FiCheck className="w-5 h-5 text-blue-600" />
+              </div>
+              <span className="text-sm font-medium">Secure & Private</span>
             </div>
             <div className="flex items-center space-x-2">
-              <FiCheck className="w-4 h-4" />
-              <span className="text-sm">24/7 Support</span>
+              <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                <FiCheck className="w-5 h-5 text-purple-600" />
+              </div>
+              <span className="text-sm font-medium">24/7 Support</span>
             </div>
           </div>
         </div>
