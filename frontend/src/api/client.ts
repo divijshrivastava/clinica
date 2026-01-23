@@ -1,7 +1,31 @@
 import axios from 'axios'
 import { useAuthStore } from '../store/authStore'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
+// Determine API URL based on environment
+const getApiBaseUrl = () => {
+  // If explicitly set via environment variable, use that
+  if (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL;
+  }
+
+  // If running on production domain, use production API
+  if (window.location.hostname === 'mymedic.life' || window.location.hostname === 'www.mymedic.life') {
+    return 'https://api.mymedic.life';
+  }
+
+  // If running on Vercel preview/production deployments
+  if (window.location.hostname.includes('vercel.app')) {
+    return 'https://api.mymedic.life';
+  }
+
+  // Default to localhost for local development
+  return 'http://localhost:3000';
+};
+
+const API_BASE_URL = getApiBaseUrl()
+
+// Log the API URL being used (helpful for debugging)
+console.log('🌐 API Base URL:', API_BASE_URL)
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
