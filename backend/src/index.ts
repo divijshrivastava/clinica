@@ -94,16 +94,27 @@ export function createApp(): Application {
   app.use(helmet());
   app.use(cors({
     origin: config.env === 'production'
-      ? [
-          'https://frontend-chi-henna-22.vercel.app',
-          'https://frontend-fd224p762-divijshrivastavas-projects.vercel.app',
-          'https://mymedic.life',
-          'https://www.mymedic.life'
-        ]
+      ? (origin, callback) => {
+          // Allow requests with no origin (mobile apps, Postman, etc.)
+          if (!origin) return callback(null, true);
+
+          // Allow mymedic.life domains
+          if (origin === 'https://mymedic.life' || origin === 'https://www.mymedic.life') {
+            return callback(null, true);
+          }
+
+          // Allow all Vercel deployment URLs
+          if (origin.endsWith('.vercel.app')) {
+            return callback(null, true);
+          }
+
+          // Reject other origins
+          return callback(new Error('Not allowed by CORS'));
+        }
       : true,
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Hospital-ID', 'X-User-ID'],
   }));
   app.use(compression());
   app.use(express.json({ limit: "10mb" }));
