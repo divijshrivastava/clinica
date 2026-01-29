@@ -32,7 +32,7 @@ export default function DoctorOnboarding() {
   const navigate = useNavigate()
   const [currentStep, setCurrentStep] = useState(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const { setAuth } = useAuthStore()
+  const { login: authLogin } = useAuthStore()
   const [formData, setFormData] = useState<Partial<Step1Data & Step2Data & Step3Data>>({
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
   })
@@ -104,12 +104,7 @@ export default function DoctorOnboarding() {
       })
 
       // Set auth state
-      setAuth(
-        loginResponse.token,
-        loginResponse.user.user_id,
-        loginResponse.user.hospital_id,
-        loginResponse.user.role
-      )
+      authLogin(loginResponse.token, loginResponse.user)
 
       toast.success('Account created successfully! Welcome to Clinica!')
 

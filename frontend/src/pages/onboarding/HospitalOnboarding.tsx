@@ -131,7 +131,7 @@ export default function HospitalOnboarding() {
   const navigate = useNavigate()
   const [currentStep, setCurrentStep] = useState(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const { setAuth } = useAuthStore()
+  const { login: authLogin } = useAuthStore()
   const [formData, setFormData] = useState<Partial<Step1Data & Step2Data & Step3Data & Step4Data & Step5Data>>({
     defaultAppointmentDuration: 30,
     estimatedDoctors: 50,
@@ -335,12 +335,7 @@ export default function HospitalOnboarding() {
       })
 
       // Set auth state
-      setAuth(
-        loginResponse.token,
-        loginResponse.user.user_id,
-        loginResponse.user.hospital_id,
-        loginResponse.user.role
-      )
+      authLogin(loginResponse.token, loginResponse.user)
 
       toast.success('Hospital setup complete! Welcome to Clinica!')
 

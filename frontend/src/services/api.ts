@@ -81,7 +81,7 @@ export interface LoginResponse {
     hospital_id: string;
     email: string;
     full_name: string;
-    role: string;
+    role: 'admin' | 'doctor' | 'nurse' | 'receptionist';
   };
 }
 

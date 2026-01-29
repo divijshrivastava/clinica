@@ -137,7 +137,7 @@ export default function ClinicOnboarding() {
   const navigate = useNavigate()
   const [currentStep, setCurrentStep] = useState(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const { setAuth } = useAuthStore()
+  const { login: authLogin } = useAuthStore()
   const [formData, setFormData] = useState<Partial<Step1Data & Step2Data & Step3Data & Step4Data & Step5Data>>({
     workingHoursStart: '09:00',
     workingHoursEnd: '18:00',
@@ -337,12 +337,7 @@ export default function ClinicOnboarding() {
       })
 
       // Set auth state
-      setAuth(
-        loginResponse.token,
-        loginResponse.user.user_id,
-        loginResponse.user.hospital_id,
-        loginResponse.user.role
-      )
+      authLogin(loginResponse.token, loginResponse.user)
 
       toast.success('Clinic created successfully! Welcome to Clinica!')
 
