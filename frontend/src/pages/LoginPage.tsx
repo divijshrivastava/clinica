@@ -1,188 +1,167 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { toast } from 'react-toastify'
+import { FiArrowLeft, FiArrowRight, FiCheck, FiEye, FiEyeOff, FiLock, FiShield } from 'react-icons/fi'
 import { LoginCredentials } from '../api/auth'
 import { useAuthStore } from '../store/authStore'
 import { login } from '../services/api'
+import { BrandMark } from '../components/BrandMark'
 
 export default function LoginPage() {
   const navigate = useNavigate()
   const { register, handleSubmit, formState: { errors } } = useForm<LoginCredentials>()
   const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const { isAuthenticated } = useAuthStore()
 
-  // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/', { replace: true })
+      navigate('/dashboard', { replace: true })
     }
   }, [isAuthenticated, navigate])
 
   const onSubmit = async (data: LoginCredentials) => {
-    console.log('🔐 Login attempt:', data.email)
-    console.log('🔐 Login data:', data)
     setLoading(true)
 
     try {
-      console.log('🔐 Calling login API...')
-      // Call the real login API
-      const response = await login({
-        email: data.email,
-        password: data.password,
-      })
-
-      console.log('🔐 Login successful:', response)
-
-      // Update Zustand store
+      const response = await login({ email: data.email, password: data.password })
       const store = useAuthStore.getState()
       store.login(response.token, response.user)
       store.setHasHydrated(true)
-
-      toast.success('Login successful!')
-
-      // Wait a moment for everything to settle
-      await new Promise(resolve => setTimeout(resolve, 300))
-
-      // Navigate to dashboard
-      console.log('🚀 Navigating to dashboard...')
-      navigate('/', { replace: true })
-    } catch (error: any) {
-      console.error('Login error:', error)
-      const errorMessage = error.response?.data?.error?.message || error.message || 'Login failed'
-      toast.error(errorMessage)
+      toast.success('Welcome back')
+      navigate('/dashboard', { replace: true })
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unable to sign in. Please check your details.'
+      const apiMessage = (error as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message
+      toast.error(apiMessage || message)
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 via-primary-500 to-purple-600 px-4 py-12">
-      <div className="max-w-md w-full">
-        {/* Logo and Title */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-xl shadow-lg mb-4">
-            <svg className="w-10 h-10 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-            </svg>
+    <main className="grid min-h-screen bg-[#f8faf7] lg:grid-cols-[1.05fr_0.95fr]">
+      <section className="relative hidden min-h-screen overflow-hidden bg-brand-950 p-10 text-white lg:flex lg:flex-col lg:justify-between xl:p-14">
+        <div className="pointer-events-none absolute -right-40 -top-32 h-[460px] w-[460px] rounded-full bg-mint-500/20 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-48 -left-28 h-[500px] w-[500px] rounded-full bg-emerald-300/10 blur-3xl" />
+
+        <Link to="/" aria-label="MyMedic home" className="relative z-10 w-fit no-underline">
+          <BrandMark inverse />
+        </Link>
+
+        <div className="relative z-10 max-w-xl py-14">
+          <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3.5 py-2 text-xs font-bold uppercase tracking-[0.14em] text-mint-300">
+            <span className="h-2 w-2 rounded-full bg-mint-400" /> Your practice, in rhythm
+          </span>
+          <h1 className="mt-7 text-5xl font-bold leading-[1.03] tracking-[-0.05em] xl:text-6xl">
+            Everything in place for a better day of care.
+          </h1>
+          <p className="mt-6 max-w-lg text-lg leading-8 text-white/60">
+            Pick up exactly where you left off—with your schedule, patient context, and next actions ready.
+          </p>
+
+          <div className="mt-10 grid max-w-lg grid-cols-2 gap-3">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-4 backdrop-blur-sm">
+              <FiShield className="h-5 w-5 text-mint-300" />
+              <p className="mt-4 text-sm font-semibold">Secure access</p>
+              <p className="mt-1 text-xs leading-5 text-white/45">Protected practice data</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-4 backdrop-blur-sm">
+              <FiCheck className="h-5 w-5 text-mint-300" />
+              <p className="mt-4 text-sm font-semibold">One workspace</p>
+              <p className="mt-1 text-xs leading-5 text-white/45">Your day, connected</p>
+            </div>
           </div>
-          <h1 className="text-4xl font-bold text-white mb-2">MyMedic</h1>
-          <p className="text-blue-100 text-lg">Doctor-first Patient Management</p>
         </div>
 
-        {/* Login Card */}
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">Welcome back</h2>
-            <p className="text-gray-600 mt-1">Sign in to your account</p>
+        <p className="relative z-10 text-xs text-white/35">Care, beautifully organized.</p>
+      </section>
+
+      <section className="flex min-h-screen flex-col px-5 py-6 sm:px-10 lg:px-14 xl:px-24">
+        <div className="flex items-center justify-between lg:justify-end">
+          <Link to="/" aria-label="MyMedic home" className="lg:hidden"><BrandMark /></Link>
+          <Link to="/" className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold text-brand-600 transition-colors hover:bg-brand-100 hover:text-brand-900">
+            <FiArrowLeft aria-hidden="true" /> Back to home
+          </Link>
+        </div>
+
+        <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center py-12">
+          <div className="mb-9">
+            <p className="text-sm font-bold uppercase tracking-[0.14em] text-mint-700">Welcome back</p>
+            <h2 className="mt-3 text-4xl font-bold tracking-[-0.045em] text-brand-950 sm:text-[2.75rem]">Sign in to MyMedic</h2>
+            <p className="mt-3 text-base leading-7 text-brand-600">Enter your practice account details to continue.</p>
           </div>
 
-          <form
-            onSubmit={handleSubmit(onSubmit)}
-            className="space-y-5"
-            noValidate
-          >
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                Email
-              </label>
+              <label htmlFor="email" className="mb-2 block text-sm font-semibold text-brand-900">Email address</label>
               <input
                 id="email"
                 type="email"
                 autoComplete="email"
-                {...register('email', { required: 'Email is required' })}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-gray-900 placeholder:text-gray-400"
-                placeholder="doctor@example.com"
+                autoFocus
+                {...register('email', {
+                  required: 'Email is required',
+                  pattern: { value: /^\S+@\S+\.\S+$/, message: 'Enter a valid email address' },
+                })}
+                className={`h-14 w-full rounded-2xl border bg-white px-4 text-base text-brand-950 shadow-sm outline-none transition-all placeholder:text-brand-300 focus:border-brand-700 focus:ring-4 focus:ring-brand-900/5 ${errors.email ? 'border-red-400' : 'border-brand-200'}`}
+                placeholder="you@yourpractice.com"
+                aria-invalid={Boolean(errors.email)}
               />
-              {errors.email && (
-                <p className="mt-2 text-sm text-red-600">{errors.email.message}</p>
-              )}
+              {errors.email && <p className="mt-2 text-sm text-red-600" role="alert">{errors.email.message}</p>}
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                {...register('password', { required: 'Password is required' })}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-gray-900 placeholder:text-gray-400"
-                placeholder="••••••••"
-              />
-              {errors.password && (
-                <p className="mt-2 text-sm text-red-600">{errors.password.message}</p>
-              )}
+              <div className="mb-2 flex items-center justify-between">
+                <label htmlFor="password" className="text-sm font-semibold text-brand-900">Password</label>
+                <span className="text-xs font-medium text-brand-500">Secure sign in</span>
+              </div>
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  {...register('password', {
+                    required: 'Password is required',
+                  })}
+                  className={`h-14 w-full rounded-2xl border bg-white px-4 pr-12 text-base text-brand-950 shadow-sm outline-none transition-all placeholder:text-brand-300 focus:border-brand-700 focus:ring-4 focus:ring-brand-900/5 ${errors.password ? 'border-red-400' : 'border-brand-200'}`}
+                  placeholder="Enter your password"
+                  aria-invalid={Boolean(errors.password)}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  className="absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-xl text-brand-400 transition-colors hover:bg-brand-50 hover:text-brand-800"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <FiEyeOff /> : <FiEye />}
+                </button>
+              </div>
+              {errors.password && <p className="mt-2 text-sm text-red-600" role="alert">{errors.password.message}</p>}
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-base font-semibold text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="group flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-brand-900 px-5 font-semibold text-white shadow-soft transition-all hover:-translate-y-0.5 hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
             >
               {loading ? (
-                <>
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Signing in...
-                </>
+                <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> Signing in…</>
               ) : (
-                'Sign in'
+                <>Sign in securely <FiArrowRight className="transition-transform group-hover:translate-x-0.5" /></>
               )}
             </button>
           </form>
 
-          {/* Divider */}
-          <div className="mt-8 mb-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300"></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-4 bg-white text-gray-500">New to MyMedic?</span>
-              </div>
-            </div>
-          </div>
+          <div className="my-8 flex items-center gap-4"><span className="h-px flex-1 bg-brand-100" /><span className="text-xs font-medium text-brand-400">New to MyMedic?</span><span className="h-px flex-1 bg-brand-100" /></div>
 
-          {/* Sign Up Button */}
-          <button
-            onClick={() => navigate('/signup')}
-            className="w-full flex justify-center items-center py-3 px-4 border-2 border-primary-600 rounded-lg shadow-sm text-base font-semibold text-primary-600 bg-white hover:bg-primary-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-            </svg>
-            Create new account
-          </button>
-        </div>
+          <Link to="/signup" className="flex h-14 items-center justify-center rounded-2xl border border-brand-200 bg-white px-5 font-semibold text-brand-900 shadow-sm transition-colors hover:border-brand-300 hover:bg-brand-50">
+            Create a practice account
+          </Link>
 
-        {/* Trust Badges */}
-        <div className="mt-8 text-center">
-          <div className="flex items-center justify-center space-x-6 text-white text-sm">
-            <div className="flex items-center space-x-2">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              <span>Secure</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              <span>HIPAA Compliant</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
-              </svg>
-              <span>Trusted</span>
-            </div>
-          </div>
+          <p className="mt-8 flex items-center justify-center gap-2 text-center text-xs text-brand-400"><FiLock aria-hidden="true" /> Your connection is encrypted and secure.</p>
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
   )
 }
-

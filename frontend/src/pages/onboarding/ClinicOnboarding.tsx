@@ -346,7 +346,7 @@ export default function ClinicOnboarding() {
       localStorage.setItem('is_new_user', 'true')
 
       // Redirect to dashboard
-      navigate('/')
+      navigate('/dashboard')
     } catch (error: any) {
       console.error('Registration error:', error)
       console.error('Error response:', JSON.stringify(error.response?.data, null, 2))

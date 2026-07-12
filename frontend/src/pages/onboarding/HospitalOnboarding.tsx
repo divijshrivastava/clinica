@@ -344,7 +344,7 @@ export default function HospitalOnboarding() {
       localStorage.setItem('is_new_user', 'true')
 
       // Redirect to dashboard
-      navigate('/')
+      navigate('/dashboard')
     } catch (error: any) {
       console.error('Registration error:', error)
       const errorMessage = error.response?.data?.error?.message || error.message || 'Failed to setup hospital'

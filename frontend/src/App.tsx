@@ -4,6 +4,7 @@ import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import { useAuthStore } from './store/authStore'
 import LoginPage from './pages/LoginPage'
+import { LandingPage } from './pages/LandingPage'
 import SignupPage from './pages/SignupPage'
 import DoctorOnboarding from './pages/onboarding/DoctorOnboarding'
 import ClinicOnboarding from './pages/onboarding/ClinicOnboarding'
@@ -89,37 +90,32 @@ function App() {
   return (
     <Router>
       <Routes>
+        <Route path="/" element={<LandingPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/onboarding/doctor" element={<DoctorOnboarding />} />
         <Route path="/onboarding/clinic" element={<ClinicOnboarding />} />
         <Route path="/onboarding/hospital" element={<HospitalOnboarding />} />
         <Route path="/onboarding" element={<OnboardingPage />} />
         <Route path="/login" element={<LoginPage />} />
-        <Route
-          path="/"
-          element={
-            <PrivateRoute>
-              <Layout />
-            </PrivateRoute>
-          }
-        >
-          <Route index element={<Dashboard />} />
-          <Route path="patients" element={<PatientsPage />} />
-          <Route path="patients/:id" element={<PatientDetailPage />} />
-          <Route path="visits" element={<VisitsPage />} />
-          <Route path="visits/:id" element={<VisitDetailPage />} />
-          <Route path="doctors/:id" element={<DoctorDetailPage />} />
-          <Route path="prescriptions" element={<PrescriptionsPage />} />
-          <Route path="prescriptions/:id" element={<PrescriptionDetailPage />} />
-          <Route path="appointments" element={<AppointmentsPage />} />
-          <Route path="appointments/:id" element={<AppointmentDetailPage />} />
-          <Route path="notes" element={<MedicalNotesPage />} />
-          <Route path="documents" element={<DocumentsPage />} />
-          <Route path="doctor-profiles" element={<DoctorProfilesPage />} />
-          <Route path="doctor-profiles/:id" element={<DoctorProfileDetailPage />} />
-          <Route path="doctor-profiles/:id/schedule" element={<DoctorScheduleEditorPage />} />
-          <Route path="slots" element={<SlotAvailabilityPage />} />
+        <Route element={<PrivateRoute><Layout /></PrivateRoute>}>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/patients" element={<PatientsPage />} />
+          <Route path="/patients/:id" element={<PatientDetailPage />} />
+          <Route path="/visits" element={<VisitsPage />} />
+          <Route path="/visits/:id" element={<VisitDetailPage />} />
+          <Route path="/doctors/:id" element={<DoctorDetailPage />} />
+          <Route path="/prescriptions" element={<PrescriptionsPage />} />
+          <Route path="/prescriptions/:id" element={<PrescriptionDetailPage />} />
+          <Route path="/appointments" element={<AppointmentsPage />} />
+          <Route path="/appointments/:id" element={<AppointmentDetailPage />} />
+          <Route path="/notes" element={<MedicalNotesPage />} />
+          <Route path="/documents" element={<DocumentsPage />} />
+          <Route path="/doctor-profiles" element={<DoctorProfilesPage />} />
+          <Route path="/doctor-profiles/:id" element={<DoctorProfileDetailPage />} />
+          <Route path="/doctor-profiles/:id/schedule" element={<DoctorScheduleEditorPage />} />
+          <Route path="/slots" element={<SlotAvailabilityPage />} />
         </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <ToastContainer
         position="top-right"
@@ -138,4 +134,3 @@ function App() {
 }
 
 export default App
-
