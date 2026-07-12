@@ -1,250 +1,158 @@
-import { Outlet, Link, useLocation } from 'react-router-dom'
-import { useAuthStore } from '../store/authStore'
+import { useState } from 'react'
+import { Link, Outlet, useLocation } from 'react-router-dom'
 import {
-  FiHome,
-  FiUsers,
-  FiCalendar,
-  FiFileText,
-  FiClipboard,
-  FiFile,
   FiActivity,
+  FiBell,
+  FiCalendar,
+  FiChevronDown,
+  FiClipboard,
+  FiClock,
+  FiFile,
+  FiFileText,
+  FiHome,
   FiLogOut,
   FiMenu,
-  FiX,
+  FiPlus,
   FiSearch,
   FiUserCheck,
-  FiClock
+  FiUsers,
+  FiX,
 } from 'react-icons/fi'
-import { useState } from 'react'
+import { useAuthStore } from '../store/authStore'
+import { BrandMark } from './BrandMark'
 
 const navigation = [
-  { name: 'Overview', href: '/', icon: FiHome },
-  { name: 'Patients', href: '/patients', icon: FiUsers },
-  { name: 'Doctors', href: '/doctor-profiles', icon: FiUserCheck },
-  { name: 'Available Slots', href: '/slots', icon: FiClock },
-  { name: 'Visits', href: '/visits', icon: FiCalendar },
-  { name: 'Appointments', href: '/appointments', icon: FiActivity },
-  { name: 'Prescriptions', href: '/prescriptions', icon: FiFileText },
-  { name: 'Notes', href: '/notes', icon: FiClipboard },
-  { name: 'Documents', href: '/documents', icon: FiFile },
+  {
+    label: 'Workspace',
+    items: [
+      { name: 'Overview', href: '/dashboard', icon: FiHome },
+      { name: 'Patients', href: '/patients', icon: FiUsers },
+      { name: 'Appointments', href: '/appointments', icon: FiCalendar },
+      { name: 'Visits', href: '/visits', icon: FiActivity },
+    ],
+  },
+  {
+    label: 'Clinical',
+    items: [
+      { name: 'Doctors', href: '/doctor-profiles', icon: FiUserCheck },
+      { name: 'Availability', href: '/slots', icon: FiClock },
+      { name: 'Prescriptions', href: '/prescriptions', icon: FiFileText },
+      { name: 'Medical notes', href: '/notes', icon: FiClipboard },
+      { name: 'Documents', href: '/documents', icon: FiFile },
+    ],
+  },
 ]
+
+const routeTitles: Record<string, string> = {
+  '/dashboard': 'Overview',
+  '/patients': 'Patients',
+  '/appointments': 'Appointments',
+  '/visits': 'Visits',
+  '/doctor-profiles': 'Doctors',
+  '/slots': 'Availability',
+  '/prescriptions': 'Prescriptions',
+  '/notes': 'Medical notes',
+  '/documents': 'Documents',
+}
 
 export default function Layout() {
   const location = useLocation()
   const { user, logout } = useAuthStore()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
+  const userName = user?.email
+    ? user.email.split('@')[0].replace(/[._-]/g, ' ').replace(/^./, (letter) => letter.toUpperCase())
+    : 'Practice user'
+  const initials = userName.split(' ').slice(0, 2).map((part) => part[0]).join('').toUpperCase()
+  const pageTitle = Object.entries(routeTitles).find(([path]) => location.pathname === path || location.pathname.startsWith(`${path}/`))?.[1] || 'MyMedic'
+
   const handleLogout = () => {
     logout()
     window.location.href = '/login'
   }
 
-  const getUserInitials = () => {
-    if (user?.email) {
-      const name = user.email.split('@')[0]
-      return name.substring(0, 2).toUpperCase()
-    }
-    return 'U'
-  }
+  const isActive = (href: string) => location.pathname === href || (href !== '/dashboard' && location.pathname.startsWith(`${href}/`))
 
-  const getUserName = () => {
-    if (user?.email) {
-      const name = user.email.split('@')[0]
-      return name.charAt(0).toUpperCase() + name.slice(1).replace(/[._-]/g, ' ')
-    }
-    return 'User'
-  }
-
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Mobile menu button */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-slate-900 px-4 py-3 flex items-center justify-between">
-        <Link to="/" className="flex items-center space-x-2 hover:opacity-80 transition-opacity cursor-pointer no-underline">
-          <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
-            <FiActivity className="w-5 h-5 text-white" />
-          </div>
-          <h1 className="text-xl font-bold text-white m-0">MyMedic</h1>
-        </Link>
-        <button
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="p-2 rounded-md text-gray-300 hover:bg-slate-800"
-        >
-          {mobileMenuOpen ? <FiX size={24} /> : <FiMenu size={24} />}
-        </button>
+  const sidebar = (
+    <div className="flex h-full flex-col bg-white">
+      <div className="flex h-20 items-center justify-between px-5">
+        <Link to="/dashboard" aria-label="Go to overview" className="no-underline"><BrandMark /></Link>
+        <button type="button" onClick={() => setMobileMenuOpen(false)} className="rounded-xl p-2 text-brand-500 lg:hidden" aria-label="Close menu"><FiX className="h-5 w-5" /></button>
       </div>
 
-      <div className="flex">
-        {/* Sidebar - Desktop */}
-        <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 lg:left-0 bg-slate-900 z-40">
-          <div className="flex-1 flex flex-col pt-6 pb-4 overflow-y-auto w-full">
-            {/* Logo */}
-            <div className="flex-shrink-0 px-6 mb-8">
-              <Link to="/" className="flex items-center hover:opacity-80 transition-opacity cursor-pointer no-underline">
-                <div className="w-10 h-10 bg-primary-600 rounded-lg flex items-center justify-center mr-3">
-                  <FiActivity className="w-6 h-6 text-white" />
-                </div>
-                <h1 className="text-xl font-bold text-white m-0">MyMedic</h1>
-              </Link>
-            </div>
+      <div className="mx-4 mb-5 rounded-2xl border border-brand-100 bg-[#f6f8f5] p-3.5">
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-900 text-white"><FiActivity /></span>
+          <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-brand-950">Practice workspace</span><span className="block text-xs text-brand-500">Active account</span></span>
+          <FiChevronDown className="text-brand-400" />
+        </div>
+      </div>
 
-            {/* Search Bar */}
-            <div className="px-4 mb-6">
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FiSearch className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  type="text"
-                  placeholder="Search here..."
-                  className="block w-full pl-10 pr-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-sm text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-
-            {/* Navigation */}
-            <nav className="flex-1 px-3 space-y-1">
-              {navigation.map((item) => {
-                const Icon = item.icon
-                const isActive = location.pathname === item.href
-                return (
-                  <Link
-                    key={item.name}
-                    to={item.href}
-                    onClick={() => {
-                      console.log('Navigation clicked:', item.name, item.href)
-                    }}
-                    className={`
-                      group flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-all no-underline cursor-pointer
-                      ${isActive
-                        ? 'bg-slate-800 text-white shadow-md'
-                        : 'text-gray-400 hover:bg-slate-800 hover:text-white'
-                      }
-                    `}
-                  >
-                    <Icon className={`mr-3 h-5 w-5 ${isActive ? 'text-white' : 'text-gray-400 group-hover:text-white'}`} />
-                    {item.name}
-                  </Link>
-                )
-              })}
-            </nav>
-
-            {/* User Section */}
-            <div className="px-4 py-4 border-t border-slate-800">
-              <div className="flex items-center mb-3 px-2">
-                <div className="flex-shrink-0">
-                  <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center shadow-md">
-                    <span className="text-white font-semibold text-sm">
-                      {getUserInitials()}
-                    </span>
-                  </div>
-                </div>
-                <div className="ml-3 flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white truncate">{getUserName()}</p>
-                  <p className="text-xs text-gray-400 capitalize">{user?.role || 'Doctor'}</p>
-                </div>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="w-full flex items-center px-3 py-2.5 text-sm font-medium text-gray-400 rounded-lg hover:bg-slate-800 hover:text-white transition-all"
-              >
-                <FiLogOut className="mr-3 h-5 w-5" />
-                Logout
-              </button>
+      <nav className="flex-1 space-y-6 overflow-y-auto px-3 pb-4" aria-label="Application navigation">
+        {navigation.map((group) => (
+          <div key={group.label}>
+            <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-brand-400">{group.label}</p>
+            <div className="space-y-1">
+              {group.items.map(({ name, href, icon: Icon }) => (
+                <Link
+                  key={href}
+                  to={href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors ${isActive(href) ? 'bg-brand-900 text-white shadow-sm' : 'text-brand-600 hover:bg-brand-50 hover:text-brand-950'}`}
+                >
+                  <Icon className={`h-[18px] w-[18px] ${isActive(href) ? 'text-mint-300' : 'text-brand-400 group-hover:text-brand-700'}`} />
+                  {name}
+                </Link>
+              ))}
             </div>
           </div>
-        </aside>
+        ))}
+      </nav>
 
-        {/* Mobile sidebar */}
-        {mobileMenuOpen && (
-          <div className="lg:hidden fixed inset-0 z-40">
-            <div className="fixed inset-0 bg-gray-600 bg-opacity-75" onClick={() => setMobileMenuOpen(false)} />
-            <div className="fixed inset-y-0 left-0 w-64 bg-slate-900 shadow-xl">
-              <div className="flex-1 flex flex-col pt-5 pb-4 overflow-y-auto">
-                <div className="flex items-center justify-between px-4 mb-6">
-                  <Link to="/" onClick={() => setMobileMenuOpen(false)} className="flex items-center space-x-2 hover:opacity-80 transition-opacity cursor-pointer no-underline">
-                    <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
-                      <FiActivity className="w-5 h-5 text-white" />
-                    </div>
-                    <h1 className="text-lg font-bold text-white m-0">MyMedic</h1>
-                  </Link>
-                  <button
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="p-2 rounded-md text-gray-400"
-                  >
-                    <FiX size={24} />
-                  </button>
-                </div>
+      <div className="border-t border-brand-100 p-3">
+        <div className="flex items-center gap-3 rounded-2xl p-2">
+          <span className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-mint-100 text-sm font-bold text-mint-800">{initials || 'U'}</span>
+          <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-brand-950">{userName}</span><span className="block truncate text-xs capitalize text-brand-500">{user?.role || 'Doctor'}</span></span>
+          <button type="button" onClick={handleLogout} className="flex h-9 w-9 items-center justify-center rounded-xl text-brand-400 transition-colors hover:bg-red-50 hover:text-red-600" aria-label="Sign out"><FiLogOut /></button>
+        </div>
+      </div>
+    </div>
+  )
 
-                {/* Search Bar - Mobile */}
-                <div className="px-4 mb-6">
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <FiSearch className="h-5 w-5 text-gray-400" />
-                    </div>
-                    <input
-                      type="text"
-                      placeholder="Search here..."
-                      className="block w-full pl-10 pr-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-sm text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
+  return (
+    <div className="min-h-screen bg-[#f6f8f5] text-brand-950">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 border-r border-brand-100 lg:block">{sidebar}</aside>
 
-                <nav className="flex-1 px-3 space-y-1">
-                  {navigation.map((item) => {
-                    const Icon = item.icon
-                    const isActive = location.pathname === item.href
-                    return (
-                      <Link
-                        key={item.name}
-                        to={item.href}
-                        onClick={() => setMobileMenuOpen(false)}
-                        className={`
-                          group flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-all no-underline
-                          ${isActive
-                            ? 'bg-slate-800 text-white'
-                            : 'text-gray-400 hover:bg-slate-800 hover:text-white'
-                          }
-                        `}
-                      >
-                        <Icon className={`mr-3 h-5 w-5 ${isActive ? 'text-white' : 'text-gray-400'}`} />
-                        {item.name}
-                      </Link>
-                    )
-                  })}
-                </nav>
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <button type="button" className="absolute inset-0 h-full w-full bg-brand-950/40 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} aria-label="Close menu overlay" />
+          <aside className="relative h-full w-[290px] max-w-[85vw] border-r border-brand-100 shadow-2xl">{sidebar}</aside>
+        </div>
+      )}
 
-                <div className="px-4 py-4 border-t border-slate-800">
-                  <div className="flex items-center mb-3 px-2">
-                    <div className="flex-shrink-0">
-                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center">
-                        <span className="text-white font-semibold text-sm">
-                          {getUserInitials()}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="ml-3">
-                      <p className="text-sm font-medium text-white">{getUserName()}</p>
-                      <p className="text-xs text-gray-400 capitalize">{user?.role || 'Doctor'}</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={handleLogout}
-                    className="w-full flex items-center px-3 py-2.5 text-sm font-medium text-gray-400 rounded-lg hover:bg-slate-800 hover:text-white transition-all"
-                  >
-                    <FiLogOut className="mr-3 h-5 w-5" />
-                    Logout
-                  </button>
-                </div>
-              </div>
+      <div className="lg:pl-64">
+        <header className="sticky top-0 z-30 border-b border-brand-100 bg-[#f6f8f5]/90 backdrop-blur-xl">
+          <div className="flex h-20 items-center gap-3 px-4 sm:px-6 lg:px-8">
+            <button type="button" onClick={() => setMobileMenuOpen(true)} className="flex h-10 w-10 items-center justify-center rounded-xl border border-brand-100 bg-white text-brand-700 lg:hidden" aria-label="Open navigation"><FiMenu className="h-5 w-5" /></button>
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-brand-400">MyMedic workspace</p>
+              <h1 className="truncate text-lg font-bold tracking-tight text-brand-950">{pageTitle}</h1>
+            </div>
+
+            <div className="ml-auto flex items-center gap-2 sm:gap-3">
+              <label className="relative hidden md:block">
+                <span className="sr-only">Search the workspace</span>
+                <FiSearch className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-400" />
+                <input type="search" placeholder="Search patients, visits…" className="h-10 w-64 rounded-xl border border-brand-100 bg-white pl-10 pr-4 text-sm text-brand-950 outline-none transition-all placeholder:text-brand-400 focus:w-72 focus:border-brand-300 focus:ring-4 focus:ring-brand-900/5" />
+              </label>
+              <button type="button" className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-brand-100 bg-white text-brand-600 transition-colors hover:border-brand-200 hover:text-brand-950" aria-label="Notifications"><FiBell /><span className="absolute right-2.5 top-2.5 h-1.5 w-1.5 rounded-full bg-orange-400 ring-2 ring-white" /></button>
+              <Link to="/patients?action=register" className="inline-flex h-10 items-center gap-2 rounded-xl bg-brand-900 px-3.5 text-sm font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-brand-800 sm:px-4"><FiPlus /><span className="hidden sm:inline">New patient</span></Link>
             </div>
           </div>
-        )}
+        </header>
 
-        {/* Main content */}
-        <main className="flex-1 lg:ml-64 pt-16 lg:pt-0 min-h-screen bg-gray-50">
-          <div className="py-6 px-4 sm:px-6 lg:px-8">
-            <Outlet />
-          </div>
+        <main className="min-h-[calc(100vh-5rem)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+          <div className="mx-auto max-w-[1440px]"><Outlet /></div>
         </main>
       </div>
     </div>
